@@ -38,16 +38,30 @@ class ImageDeduplicator:
             self.logger.info("Нет дубликатов для удаления.")
             return
 
+        total_images = len(self.hashes)  # Общее количество изображений
+        removed_count = 0  # Количество удаленных дубликатов
+
         for img1, img2 in self.duplicates:
             img_path = os.path.join(self.output_dir, img2)
             if os.path.exists(img_path):  # Проверка на существование файла
-                self.logger.info(f"Удаляем дубликат: {img_path}")
+                # self.logger.info(f"Удаляем дубликат: {img_path}")
                 os.remove(img_path)
+                removed_count += 1  # Увеличиваем счетчик удаленных изображений
             else:
-                self.logger.warning(f"Файл не найден, пропускаем: {img_path}")
+                pass
+                # self.logger.warning(f"Файл не найден, пропускаем: {img_path}")
+
+        return total_images, removed_count  # Возвращаем общее количество и количество удаленных изображений
 
     def deduplicate_images(self):
         """Основной метод для поиска и удаления дубликатов."""
         self.find_similar_images()
-        self.remove_duplicates()
+        total_images, removed_count = self.remove_duplicates()
         self.logger.info("Процесс удаления дубликатов завершен.")
+
+        # Расчет доли удаленных изображений
+        if total_images > 0:
+            removal_fraction = removed_count / total_images
+            self.logger.info(f"Удалено {removed_count} дубликатов из {total_images} изображений. Доля удаленных: {removal_fraction:.2%}")
+        else:
+            self.logger.info("Нет изображений для обработки.")

@@ -7,10 +7,10 @@ from tools.logger_config import setup_logger
 logger = setup_logger(__name__)
 
 class ImageFilterNet:
-    def __init__(self, model_name='resnet18'):
-        # Загрузка модели с предобученными весами
+    def __init__(self, model_name='resnet18', info_threshold = 2):
         self.model = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.model.eval()
+        self.info_threshold = info_threshold
 
         self.transform = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -33,12 +33,16 @@ class ImageFilterNet:
         for image_file in image_files:
             score = self.evaluate_image(image_file)
             scores[image_file] = score
-            logger.info(f"Image: {image_file}, 1e5x * Score: {100000*score:.4f}")
+            # logger.info(f"Image: {image_file}, 1e5x * Score: {100000*score:.4f}")
 
-        sorted_images = sorted(scores.items(), key=lambda x: x[1])
-
-        num_to_remove = len(sorted_images) // 10
-        files_to_remove = [image_file for image_file, _ in sorted_images[:num_to_remove]]
+        # Убираем изображения, где 100000 * score < info_threshold
+        files_to_remove = [image_file for image_file, score in scores.items() if 100000 * score < self.info_threshold]
 
         logger.info(f"Selected {len(files_to_remove)} images for removal based on evaluation scores.")
+        
+        # Вычисляем долю удаленных картинок
+        total_images = len(image_files)
+        fraction_removed = len(files_to_remove) / total_images if total_images > 0 else 0
+        logger.info(f"Fraction of images removed: {fraction_removed:.2%}")
+
         return files_to_remove

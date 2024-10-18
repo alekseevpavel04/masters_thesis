@@ -1,5 +1,6 @@
 /venv_project
 /dataset/__pycache__
+/dataset/tools/__pycache__
 
 # Игнорировать все .log файлы в папке /dataset/logs
 /dataset/logs/*.log

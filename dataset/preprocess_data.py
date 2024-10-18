@@ -11,18 +11,16 @@ class PreprocessData:
         self.coocker = VideoCooker(
             video_dir="raw_video",
             output_dir="output_images",
-            crop_width=224,
-            crop_height=224,
             similarity_threshold = 0.1
         )
 
-        self.image_filter = ImageFilterNet()
+        self.image_filter = ImageFilterNet(info_threshold = 2)
 
         self.deleter = DatasetFilter(
             image_fitter=self.image_filter
         )
 
-        self.duplicate_filter = ImageDeduplicator(output_dir="output_images", threshold = 10)
+        self.duplicate_filter = ImageDeduplicator(output_dir="output_images", threshold = 20) #10
 
     def create_dataset(self):
         logger.info("Starting dataset creation process")
@@ -30,7 +28,7 @@ class PreprocessData:
         self.coocker.extract_frames()
         logger.info("Processing images and removing low quality ones")
         self.deleter.process_images()
-        logger.info("Removing duplicate images based on PSNR")
+        logger.info("Removing duplicate images based on imagehash")
         self.duplicate_filter.deduplicate_images()
         logger.info("Dataset creation process completed")
         

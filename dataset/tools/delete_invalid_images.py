@@ -12,7 +12,7 @@ class DatasetFilter:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def process_images(self):
-        image_files = glob.glob(os.path.join(self.output_dir, '*.jpg'))
+        image_files = glob.glob(os.path.join(self.output_dir, '*.png'))
         if not image_files:
             logger.warning("No images found in the output directory. Please check the video extraction process.")
             return
