@@ -2,7 +2,7 @@ import torch
 from torchvision import transforms, models
 from torchvision.models import ResNet18_Weights
 from PIL import Image
-from logger_config import setup_logger
+from tools.logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -33,7 +33,7 @@ class ImageFilterNet:
         for image_file in image_files:
             score = self.evaluate_image(image_file)
             scores[image_file] = score
-            logger.info(f"Image: {image_file}, Score: {score:.12f}")
+            logger.info(f"Image: {image_file}, 1e5x * Score: {100000*score:.4f}")
 
         sorted_images = sorted(scores.items(), key=lambda x: x[1])
 

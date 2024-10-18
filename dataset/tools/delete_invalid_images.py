@@ -1,7 +1,7 @@
 import os
 import glob
-from image_filter_ResNet import ImageFilterNet
-from logger_config import setup_logger
+from tools.image_filter_ResNet import ImageFilterNet
+from tools.logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
