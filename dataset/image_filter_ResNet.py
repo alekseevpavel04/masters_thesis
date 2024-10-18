@@ -1,10 +1,15 @@
 import torch
 from torchvision import transforms, models
+from torchvision.models import ResNet18_Weights
 from PIL import Image
+from logger_config import setup_logger
 
-class ImageFilter:
+logger = setup_logger(__name__)
+
+class ImageFilterNet:
     def __init__(self, model_name='resnet18'):
-        self.model = models.resnet18(pretrained=True)
+        # Загрузка модели с предобученными весами
+        self.model = models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.model.eval()
 
         self.transform = transforms.Compose([
@@ -28,12 +33,12 @@ class ImageFilter:
         for image_file in image_files:
             score = self.evaluate_image(image_file)
             scores[image_file] = score
+            logger.info(f"Image: {image_file}, Score: {score:.12f}")
 
-        # Сортировка изображений по оценкам
         sorted_images = sorted(scores.items(), key=lambda x: x[1])
 
-        # Выбор % наименее информативных изображений для удаления
         num_to_remove = len(sorted_images) // 10
         files_to_remove = [image_file for image_file, _ in sorted_images[:num_to_remove]]
 
+        logger.info(f"Selected {len(files_to_remove)} images for removal based on evaluation scores.")
         return files_to_remove
