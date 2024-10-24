@@ -3,7 +3,7 @@
 /dataset_preparation/tools/__pycache__
 
 # Игнорировать все .log файлы в папке /dataset/logs
-/dataset/logs/*.log
+/dataset_preparation/logs/*.log
 
 # Игнорировать все изображения (jpg, png, jpeg и другие форматы) в папке /dataset/output_images
 /dataset_preparation/output_images/*.[jJ][pP][gG]
