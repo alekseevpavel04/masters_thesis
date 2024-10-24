@@ -20,7 +20,7 @@ class PreprocessData:
             image_fitter=self.image_filter
         )
 
-        self.duplicate_filter = ImageDeduplicator(output_dir="output_images", threshold = 20) #10
+        self.duplicate_filter = ImageDeduplicator(output_dir="output_images", threshold = 10) #10
 
     def create_dataset(self):
         logger.info("Starting dataset creation process")

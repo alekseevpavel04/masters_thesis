@@ -39,8 +39,8 @@ class VideoCooker:
             
             for line in process.stdout:
                 if "frame=" in line:
-                pass
-                # logger.info(f"Created frame: {line.strip()}")
+                    pass
+                    # logger.info(f"Created frame: {line.strip()}")
             
             process.wait()
             

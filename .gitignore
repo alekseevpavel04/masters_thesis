@@ -1,20 +1,20 @@
 /venv_project
-/dataset/__pycache__
-/dataset/tools/__pycache__
+/dataset_preparation/__pycache__
+/dataset_preparation/tools/__pycache__
 
 # Игнорировать все .log файлы в папке /dataset/logs
 /dataset/logs/*.log
 
 # Игнорировать все изображения (jpg, png, jpeg и другие форматы) в папке /dataset/output_images
-/dataset/output_images/*.[jJ][pP][gG]
-/dataset/output_images/*.[pP][nN][gG]
-/dataset/output_images/*.[jJ][pP][eE][gG]
-/dataset/output_images/*.[bB][mM][pP]
-/dataset/output_images/*.[tT][iI][fF][fF]
+/dataset_preparation/output_images/*.[jJ][pP][gG]
+/dataset_preparation/output_images/*.[pP][nN][gG]
+/dataset_preparation/output_images/*.[jJ][pP][eE][gG]
+/dataset_preparation/output_images/*.[bB][mM][pP]
+/dataset_preparation/output_images/*.[tT][iI][fF][fF]
 
 # Игнорировать все видеофайлы в папке /dataset/raw_video (например, mp4, mkv и другие форматы)
-/dataset/raw_video/*.[mM][pP]4
-/dataset/raw_video/*.[mM][kK][vV]
-/dataset/raw_video/*.[aA][vV][iI]
-/dataset/raw_video/*.[mM][oO][vV]
-/dataset/raw_video/*.[wW][mM][vV]
+/dataset_preparation/raw_video/*.[mM][pP]4
+/dataset_preparation/raw_video/*.[mM][kK][vV]
+/dataset_preparation/raw_video/*.[aA][vV][iI]
+/dataset_preparation/raw_video/*.[mM][oO][vV]
+/dataset_preparation/raw_video/*.[wW][mM][vV]
