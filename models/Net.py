@@ -56,12 +56,12 @@ class RRDBNet(nn.Module):
             
         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
         self.body = make_layer(RRDB, nb, nf=nf, gc=gc)
-        self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.conv_body = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         
         # Upsampling
-        self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.conv_up1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.conv_up2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+        self.conv_hr = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
@@ -75,12 +75,12 @@ class RRDBNet(nn.Module):
             feat = x
             
         fea = self.conv_first(feat)
-        trunk = self.trunk_conv(self.body(fea))
+        trunk = self.conv_body(self.body(fea))
         fea = fea + trunk
 
-        fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
-        fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
-        out = self.conv_last(self.lrelu(self.HRconv(fea)))
+        fea = self.lrelu(self.conv_up1(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        fea = self.lrelu(self.conv_up2(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        out = self.conv_last(self.lrelu(self.conv_hr(fea)))
 
         return out
 
