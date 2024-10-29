@@ -4,10 +4,6 @@ from torch import nn as nn
 from torch.nn import functional as F
 from torch.nn.utils import spectral_norm
 
-from basicsr.utils.registry import ARCH_REGISTRY
-
-
-@ARCH_REGISTRY.register()
 class VGGStyleDiscriminator(nn.Module):
     """VGG style discriminator with input size 128 x 128 or 256 x 256.
 
@@ -88,8 +84,6 @@ class VGGStyleDiscriminator(nn.Module):
         out = self.linear2(feat)
         return out
 
-
-@ARCH_REGISTRY.register(suffix='basicsr')
 class UNetDiscriminatorSN(nn.Module):
     """Defines a U-Net discriminator with spectral normalization (SN)
 

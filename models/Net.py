@@ -4,8 +4,6 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-from basicsr.utils.registry import ARCH_REGISTRY
-
 def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
     """Initialize network weights.
 
@@ -126,7 +124,6 @@ class RRDB(nn.Module):
         return out * 0.2 + x
 
 
-@ARCH_REGISTRY.register()
 class RRDBNet(nn.Module):
     """Networks consisting of Residual in Residual Dense Block, which is used
     in ESRGAN.
