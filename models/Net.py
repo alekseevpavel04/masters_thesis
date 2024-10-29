@@ -1,10 +1,7 @@
-# https://github.com/XPixelGroup/BasicSR/blob/master/basicsr/archs/rrdbnet_arch.py
-
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
 from torch.nn import init
-from torch.nn import _BatchNorm
 
 
 def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
@@ -31,7 +28,7 @@ def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
                 m.weight.data *= scale
                 if m.bias is not None:
                     m.bias.data.fill_(bias_fill)
-            elif isinstance(m, _BatchNorm):
+            elif isinstance(m, nn.BatchNorm2d):  # Changed from _BatchNorm to BatchNorm2d
                 init.constant_(m.weight, 1)
                 if m.bias is not None:
                     m.bias.data.fill_(bias_fill)
@@ -52,6 +49,7 @@ def make_layer(basic_block, num_basic_block, **kwarg):
         layers.append(basic_block(**kwarg))
     return nn.Sequential(*layers)
 
+
 def pixel_unshuffle(x, scale):
     """ Pixel unshuffle.
 
@@ -69,7 +67,8 @@ def pixel_unshuffle(x, scale):
     w = hw // scale
     x_view = x.view(b, c, h, scale, w, scale)
     return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
-    
+
+
 class ResidualDenseBlock(nn.Module):
     """Residual Dense Block.
 
