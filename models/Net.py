@@ -3,6 +3,9 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+from torch.nn import init
+from torch.nn import _BatchNorm
+
 
 def default_init_weights(module_list, scale=1, bias_fill=0, **kwargs):
     """Initialize network weights.
