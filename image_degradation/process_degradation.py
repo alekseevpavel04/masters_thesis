@@ -10,7 +10,7 @@ from tools.kernels import (
     generate_generalized_gaussian_kernel,
     generate_plateau_gaussian_kernel
 )
-from tools.utils import np2tensor, tensor2np, filter2D
+from image_degradation.tools.utils import np2tensor, tensor2np, filter2D
 
 class ImageDegrader:
     def __init__(
