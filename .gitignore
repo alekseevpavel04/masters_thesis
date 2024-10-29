@@ -3,6 +3,9 @@
 /dataset_preparation/tools/__pycache__
 /image_degradation/__pycache__
 /image_degradation/tools/__pycache__
+/model_training/__pycache__
+/model_training/tools/__pycache__
+
 
 # Игнорировать все .log файлы в папке /dataset/logs
 /dataset_preparation/logs/*.log
