@@ -37,3 +37,5 @@
 /dataset_preparation/raw_video/*.[aA][vV][iI]
 /dataset_preparation/raw_video/*.[mM][oO][vV]
 /dataset_preparation/raw_video/*.[wW][mM][vV]
+
+/models/pretrained_weights/*.pth
