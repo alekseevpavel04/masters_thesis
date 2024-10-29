@@ -4,7 +4,7 @@ import random
 import math
 import numpy as np
 from torch.nn import functional as F
-from tools.kernels import (
+from image_degradation.tools.kernels import (
     generate_isotropic_gaussian_kernel,
     generate_anisotropic_gaussian_kernel,
     generate_generalized_gaussian_kernel,
