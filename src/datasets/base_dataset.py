@@ -1,7 +1,7 @@
 import logging
 import random
 from typing import List
-
+import safetensors.torch
 import torch
 from torch.utils.data import Dataset
 
@@ -58,9 +58,8 @@ class BaseDataset(Dataset):
         data_dict = self._index[ind]
         data_path = data_dict["path"]
         data_object = self.load_object(data_path)
-        data_label = data_dict["label"]
 
-        instance_data = {"data_object": data_object, "labels": data_label}
+        instance_data = {"data_object": data_object}
         instance_data = self.preprocess_data(instance_data)
 
         return instance_data
@@ -78,10 +77,11 @@ class BaseDataset(Dataset):
         Args:
             path (str): path to the object.
         Returns:
-            data_object (Tensor):
+            data_object (Tensor): loaded tensor object.
         """
-        data_object = torch.load(path, weights_only=True)
-        return data_object
+        data_object_dict = safetensors.torch.load_file(path)
+        # Предположим, что ключ всегда "tensor" — берём из словаря нужный тензор
+        return data_object_dict["tensor"]
 
     def preprocess_data(self, instance_data):
         """
@@ -141,10 +141,6 @@ class BaseDataset(Dataset):
         for entry in index:
             assert "path" in entry, (
                 "Each dataset item should include field 'path'" " - path to audio file."
-            )
-            assert "label" in entry, (
-                "Each dataset item should include field 'label'"
-                " - object ground-truth label."
             )
 
     @staticmethod
