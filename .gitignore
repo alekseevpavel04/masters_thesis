@@ -1,44 +1,34 @@
-/venv_project
-/dataset_preparation/__pycache__
-/dataset_preparation/tools/__pycache__
-/image_degradation/__pycache__
-/image_degradation/tools/__pycache__
-/model_training/__pycache__
-/model_training/tools/__pycache__
-/models/__pycache__
-/models/tools/__pycache__
+/assets
+/data
+/saved
+/outputs
+/wandb
 
+# PyCharm РїСЂРѕРµРєС‚РЅС‹Рµ С„Р°Р№Р»С‹
+.idea/
 
+# РЎР¶Р°С‚С‹Р№ РґР°С‚Р°СЃРµС‚
+dataset-nano.zip
 
-# Игнорировать все .log файлы в папке /dataset/logs
-/dataset_preparation/logs/*.log
+# РЎРєСЂРёРїС‚С‹ РґР»СЏ Р·Р°РіСЂСѓР·РєРё
+download_assets.sh
 
-# Игнорировать все изображения (jpg, png, jpeg и другие форматы) в папке /dataset/output_images
-/dataset_preparation/output_images/*.[jJ][pP][gG]
-/dataset_preparation/output_images/*.[pP][nN][gG]
-/dataset_preparation/output_images/*.[jJ][pP][eE][gG]
-/dataset_preparation/output_images/*.[bB][mM][pP]
-/dataset_preparation/output_images/*.[tT][iI][fF][fF]
+# РљСЌС€РёСЂРѕРІР°РЅРЅС‹Рµ С„Р°Р№Р»С‹ Python
+__pycache__/
 
-# Игнорировать все изображения (jpg, png, jpeg и другие форматы) в папке /image_degradation
-/image_degradation/output_images/*.[jJ][pP][gG]
-/image_degradation/output_images/*.[pP][nN][gG]
-/image_degradation/output_images/*.[jJ][pP][eE][gG]
-/image_degradation/output_images/*.[bB][mM][pP]
-/image_degradation/output_images/*.[tT][iI][fF][fF]
-/image_degradation/input_images/*.[jJ][pP][gG]
-/image_degradation/input_images/*.[pP][nN][gG]
-/image_degradation/input_images/*.[jJ][pP][eE][gG]
-/image_degradation/input_images/*.[bB][mM][pP]
-/image_degradation/input_images/*.[tT][iI][fF][fF]
+# РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ WandB
+src/configs/writer/wandb.yaml
 
+# РљСЌС€РёСЂРѕРІР°РЅРЅС‹Рµ С„Р°Р№Р»С‹ Python РІ src
+src/__pycache__/
+src/datasets/__pycache__/
+src/logger/__pycache__/
+src/loss/__pycache__/
+src/metrics/__pycache__/
+src/model/__pycache__/
+src/trainer/__pycache__/
+src/transforms/__pycache__/
+src/utils/__pycache__/
 
-
-# Игнорировать все видеофайлы в папке /dataset/raw_video (например, mp4, mkv и другие форматы)
-/dataset_preparation/raw_video/*.[mM][pP]4
-/dataset_preparation/raw_video/*.[mM][kK][vV]
-/dataset_preparation/raw_video/*.[aA][vV][iI]
-/dataset_preparation/raw_video/*.[mM][oO][vV]
-/dataset_preparation/raw_video/*.[wW][mM][vV]
-
-/models/pretrained_weights/*.pth
+# Р’РёСЂС‚СѓР°Р»СЊРЅРѕРµ РѕРєСЂСѓР¶РµРЅРёРµ
+venv/

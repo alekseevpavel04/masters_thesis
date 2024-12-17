@@ -1,8 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from torch.nn import init
-import math
+
 
 def make_layer(basic_block, num_basic_block, **kwarg):
     """Make layers by stacking the same blocks."""

@@ -1,5 +1,3 @@
-# https://github.com/XPixelGroup/BasicSR/blob/master/basicsr/archs/discriminator_arch.py
-
 from torch import nn as nn
 from torch.nn import functional as F
 from torch.nn.utils import spectral_norm
