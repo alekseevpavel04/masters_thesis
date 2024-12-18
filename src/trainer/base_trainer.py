@@ -17,16 +17,21 @@ class BaseTrainer:
 
     def __init__(
         self,
-        model,
-        criterion,
+        model_gen,
+        model_disc,
+        criterion_gen,
+        criterion_disc,
         metrics,
-        optimizer,
-        lr_scheduler,
+        optimizer_gen,
+        optimizer_disc,
+        lr_scheduler_gen,
+        lr_scheduler_disc,
         config,
         device,
         dataloaders,
         logger,
         writer,
+        disc_steps = 5,
         epoch_len=None,
         skip_oom=True,
         batch_transforms=None,
@@ -66,11 +71,17 @@ class BaseTrainer:
         self.logger = logger
         self.log_step = config.trainer.get("log_step", 50)
 
-        self.model = model
-        self.criterion = criterion
-        self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
+        self.model_gen = model_gen
+        self.model_disc = model_disc
+        self.criterion_gen = criterion_gen
+        self.criterion_disc = criterion_disc
+        self.optimizer_gen = optimizer_gen
+        self.optimizer_disc = optimizer_disc
+        self.lr_scheduler_gen = lr_scheduler_gen
+        self.lr_scheduler_disc = lr_scheduler_disc
+
         self.batch_transforms = batch_transforms
+        self.disc_steps = disc_steps
 
         # define dataloaders
         self.train_dataloader = dataloaders["train"]
@@ -198,7 +209,8 @@ class BaseTrainer:
                 this epoch.
         """
         self.is_train = True
-        self.model.train()
+        self.model_gen.train()
+        self.model_disc.train()
         self.train_metrics.reset()
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
@@ -261,7 +273,8 @@ class BaseTrainer:
             logs (dict): logs that contain the information about evaluation.
         """
         self.is_train = False
-        self.model.eval()
+        self.model_gen.eval()
+        self.model_disc.eval()
         self.evaluation_metrics.reset()
         with torch.no_grad():
             for batch_idx, batch in tqdm(

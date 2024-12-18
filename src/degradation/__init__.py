@@ -1,0 +1,1 @@
+from src.degradation.process_degradation import ImageDegrader

@@ -1,20 +1,30 @@
 defaults:
-  - model: baseline
+  - model_gen: gen
+  - model_disc: disc
   - writer: wandb
   - metrics: example
   - datasets: example
   - dataloader: example
   - transforms: example
   - _self_
-optimizer:
+optimizer_gen:
   _target_: torch.optim.Adam
   lr: 3e-4
-lr_scheduler:
+optimizer_disc:
+  _target_: torch.optim.Adam
+  lr: 3e-4
+lr_scheduler_gen:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.9
   step_size: ${trainer.epoch_len}
-loss_function:
-  _target_: src.loss.ExampleLoss
+lr_scheduler_disc:
+  _target_: torch.optim.lr_scheduler.StepLR
+  gamma: 0.9
+  step_size: ${trainer.epoch_len}
+loss_function_gen:
+  _target_: src.loss.AdversarialLoss
+loss_function_disc:
+  _target_: src.loss.AdversarialLoss
 trainer:
   log_step: 50
   n_epochs: 100

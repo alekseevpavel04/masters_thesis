@@ -4,13 +4,13 @@ import random
 import math
 import numpy as np
 from torch.nn import functional as F
-from image_degradation.tools.kernels import (
+from src.degradation.kernels import (
     generate_isotropic_gaussian_kernel,
     generate_anisotropic_gaussian_kernel,
     generate_generalized_gaussian_kernel,
     generate_plateau_gaussian_kernel
 )
-from image_degradation.tools.utils import np2tensor, tensor2np, filter2D
+from src.degradation.utils import np2tensor, tensor2np, filter2D
 
 class ImageDegrader:
     def __init__(
@@ -27,8 +27,10 @@ class ImageDegrader:
         second_blur_prob=0.3,
         gaussian_noise_prob2=0.3,
         noise_range2=[0.01, 0.05],
-        mode='single_image'
+        mode='single_image',
+        device = "cpu"
     ):
+        self.device = device
         self.gaussian_noise_prob = gaussian_noise_prob
         self.noise_range = noise_range
         self.kernel_list = kernel_list
@@ -96,12 +98,12 @@ class ImageDegrader:
                 kernels.append(kernel)
             # Stack kernels along the last dimension
             stacked_kernels = np.stack(kernels, axis=0)
-            # Reshape to (B, H, W)
-            return torch.FloatTensor(stacked_kernels.squeeze(-1))
+            # Reshape to (B, H, W) and move to correct device
+            return torch.FloatTensor(stacked_kernels.squeeze(-1)).to(self.device)
         else:
-            # Generate single kernel
+            # Generate single kernel and move to correct device
             kernel = self._generate_single_kernel()
-            return torch.FloatTensor(kernel)
+            return torch.FloatTensor(kernel).to(self.device)
 
     def apply_resize(self, tensor):
         """Apply 2x downscale with random interpolation method"""
@@ -111,32 +113,34 @@ class ImageDegrader:
     def apply_noise(self, tensor, noise_prob, noise_range):
         """Apply random noise to tensor"""
         if random.random() < noise_prob:
-            noise = torch.randn_like(tensor) * random.uniform(*noise_range)
+            noise = torch.randn_like(tensor).to(self.device) * random.uniform(*noise_range)
             tensor = tensor + noise
             return torch.clamp(tensor, 0, 1)
         return tensor
 
     def _process_tensor(self, tensor):
         """Common processing pipeline for both single images and batches"""
+        # Ensure tensor is on correct device
+        tensor = tensor.to(self.device)
         batch_size = tensor.size(0)
-        
-        # Generate kernels
+
+        # Generate kernels (they will be on the correct device from _create_kernel)
         kernel1 = self._create_kernel(batch_size)
         kernel2 = self._create_kernel(batch_size) if self.second_blur_prob > 0 else None
-        
+
         # First degradation
         out = tensor
-        
+
         # Apply transformations
         out = self.apply_resize(out)
         out = filter2D(out, kernel1)
         out = self.apply_noise(out, self.gaussian_noise_prob, self.noise_range)
-        
+
         # Second degradation (optional)
         if kernel2 is not None and random.random() < self.second_blur_prob:
             out = filter2D(out, kernel2)
             out = self.apply_noise(out, self.gaussian_noise_prob2, self.noise_range2)
-        
+
         return out
 
     def degrade_image(self, input_path, output_path):
@@ -158,6 +162,11 @@ class ImageDegrader:
         cv2.imwrite(output_path, out_np)
 
     def process_batch(self, hr_batch):
+        # Ensure all operations are performed on the correct device
+        if not isinstance(hr_batch, torch.Tensor):
+            hr_batch = torch.tensor(hr_batch, device=self.device)
+        elif hr_batch.device != self.device:
+            hr_batch = hr_batch.to(self.device)
         """Process batch of images during training"""
         if self.mode != 'batch':
             raise ValueError("Degrader must be initialized with mode='batch' for batch processing")

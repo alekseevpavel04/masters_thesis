@@ -4,6 +4,8 @@ from typing import List
 import safetensors.torch
 import torch
 from torch.utils.data import Dataset
+from PIL import Image
+from torchvision import transforms
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +81,25 @@ class BaseDataset(Dataset):
         Returns:
             data_object (Tensor): loaded tensor object.
         """
-        data_object_dict = safetensors.torch.load_file(path)
-        # Предположим, что ключ всегда "tensor" — берём из словаря нужный тензор
-        return data_object_dict["tensor"]
+        # For image files
+        if path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+            # Load image using PIL
+            image = Image.open(path)
+
+            # Convert image to tensor
+            transform = transforms.Compose([
+                transforms.ToTensor(),  # Converts to tensor and scales to [0, 1]
+            ])
+
+            return transform(image)
+
+        # For PyTorch tensor files
+        elif path.lower().endswith('.pt') or path.lower().endswith('.pth'):
+            # Use weights_only=True for security
+            return torch.load(path, weights_only=True)
+
+        else:
+            raise ValueError(f"Unsupported file format: {path}")
 
     def preprocess_data(self, instance_data):
         """

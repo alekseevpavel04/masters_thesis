@@ -38,28 +38,38 @@ def main(config):
     dataloaders, batch_transforms = get_dataloaders(config, device)
 
     # build model architecture, then print to console
-    model = instantiate(config.model).to(device)
-    logger.info(model)
-
+    model_gen = instantiate(config.model_gen).to(device)
+    logger.info(model_gen)
+    model_disc = instantiate(config.model_disc).to(device)
+    logger.info(model_disc)
     # get function handles of loss and metrics
-    loss_function = instantiate(config.loss_function).to(device)
+    loss_function_gen = instantiate(config.loss_function_gen).to(device)
+    loss_function_disc = instantiate(config.loss_function_disc).to(device)
     metrics = instantiate(config.metrics)
 
     # build optimizer, learning rate scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    optimizer = instantiate(config.optimizer, params=trainable_params)
-    lr_scheduler = instantiate(config.lr_scheduler, optimizer=optimizer)
+    trainable_params_gen = filter(lambda p: p.requires_grad, model_gen.parameters())
+    optimizer_gen = instantiate(config.optimizer_gen, params=trainable_params_gen)
+    lr_scheduler_gen = instantiate(config.lr_scheduler_gen, optimizer=optimizer_gen)
+
+    trainable_params_disc = filter(lambda p: p.requires_grad, model_gen.parameters())
+    optimizer_disc = instantiate(config.optimizer_disc, params=trainable_params_disc)
+    lr_scheduler_disc = instantiate(config.lr_scheduler_disc, optimizer=optimizer_disc)
 
     # epoch_len = number of iterations for iteration-based training
     # epoch_len = None or len(dataloader) for epoch-based training
     epoch_len = config.trainer.get("epoch_len")
 
     trainer = Trainer(
-        model=model,
-        criterion=loss_function,
+        model_gen=model_gen,
+        model_disc=model_disc,
+        criterion_gen=loss_function_gen,
+        criterion_disc=loss_function_disc,
         metrics=metrics,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        optimizer_gen=optimizer_gen,
+        optimizer_disc=optimizer_disc,
+        lr_scheduler_gen=lr_scheduler_gen,
+        lr_scheduler_disc=lr_scheduler_disc,
         config=config,
         device=device,
         dataloaders=dataloaders,

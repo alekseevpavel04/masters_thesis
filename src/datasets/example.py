@@ -66,10 +66,12 @@ class CustomDataset(BaseDataset):
         print(f"Parsing custom dataset metadata...")
         # Create dataset and index
         for i, img_path in enumerate(tqdm(image_files)):
-            # Save image tensor as safetensors file
-            save_dict = {"tensor": self.load_img(img_path)}
-            save_path = image_folder / f"{i:06}.safetensors"
-            safetensors.torch.save_file(save_dict, save_path)
+            # Save the original image in the same format as the input
+            save_path = image_folder / f"{i:06}{img_path.suffix}"  # Keep the original extension (e.g., .jpg, .png)
+            img = Image.open(img_path)
+
+            # Save the image in the same format as it was originally
+            img.save(save_path)
 
             # Remove the original image file
             os.remove(img_path)
