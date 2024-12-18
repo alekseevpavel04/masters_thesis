@@ -10,9 +10,6 @@
 # Кэшированные файлы Python
 __pycache__/
 
-# Конфигурация WandB
-src/configs/writer/wandb.yaml
-
 # Кэшированные файлы Python в src
 src/__pycache__/
 src/datasets/__pycache__/
