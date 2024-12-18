@@ -38,3 +38,6 @@ trainer:
   early_stop: ${trainer.n_epochs} # epochs for early stopping
   save_dir: "saved"
   seed: 1
+  from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
+  from_pretrained_disc: "assets/weights/RealESRGAN_x2plus_netD.pth"
+  max_grad_norm: 10

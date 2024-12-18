@@ -1,4 +1,4 @@
-#TODO Clean batch (delete hr)
+#TODO Fix saving
 
 
 from src.metrics.tracker import MetricTracker
@@ -44,7 +44,7 @@ class Trainer(BaseTrainer):
 
                 # Backward pass for discriminator
                 batch["disc_loss"].backward()
-                self._clip_grad_norm()
+                self._clip_grad_norm(self.model_disc)
                 self.optimizer_disc.step()
 
             # Train Generator
@@ -69,7 +69,7 @@ class Trainer(BaseTrainer):
 
             # Backward pass for generator
             batch["gen_loss"].backward()
-            self._clip_grad_norm()
+            self._clip_grad_norm(self.model_gen)
             self.optimizer_gen.step()
 
             # Combine losses for logging

@@ -148,9 +148,14 @@ class BaseTrainer:
         if config.trainer.get("resume_from") is not None:
             resume_path = self.checkpoint_dir / config.trainer.resume_from
             self._resume_checkpoint(resume_path)
-
-        if config.trainer.get("from_pretrained") is not None:
-            self._from_pretrained(config.trainer.get("from_pretrained"))
+        print(config.trainer.get("from_pretrained_gen"))
+        print(config.trainer.get("from_pretrained_disc"))
+        if config.trainer.get("from_pretrained_gen") is not None and config.trainer.get(
+                "from_pretrained_disc") is not None:
+            self._from_pretrained(
+                config.trainer.get("from_pretrained_gen"),
+                config.trainer.get("from_pretrained_disc")
+            )
 
     def train(self):
         """
@@ -395,14 +400,14 @@ class BaseTrainer:
                 )
         return batch
 
-    def _clip_grad_norm(self):
+    def _clip_grad_norm(self, model):
         """
         Clips the gradient norm by the value defined in
         config.trainer.max_grad_norm
         """
         if self.config["trainer"].get("max_grad_norm", None) is not None:
             clip_grad_norm_(
-                self.model.parameters(), self.config["trainer"]["max_grad_norm"]
+                model.parameters(), self.config["trainer"]["max_grad_norm"]
             )
 
     @torch.no_grad()
@@ -570,24 +575,38 @@ class BaseTrainer:
 
         self.logger.info(f"Checkpoint loaded. Resume training from epoch {self.start_epoch}")
 
-    def _from_pretrained(self, pretrained_path):
+    def _from_pretrained(self, pretrained_path_gen, pretrained_path_disc):
         """
-        Init models (both generator and discriminator) with weights from pretrained pth file.
+        Init models (both generator and discriminator) with weights from pretrained files.
 
         Args:
-            pretrained_path (str): path to the model state dict.
+            pretrained_path_gen (str): path to the generator model state dict.
+            pretrained_path_disc (str): path to the discriminator model state dict.
         """
-        pretrained_path = str(pretrained_path)
+        pretrained_path_gen = str(pretrained_path_gen)
+        pretrained_path_disc = str(pretrained_path_disc)
+
         if hasattr(self, "logger"):  # to support both trainer and inferencer
-            self.logger.info(f"Loading model weights from: {pretrained_path} ...")
+            self.logger.info(f"Loading generator weights from: {pretrained_path_gen} ...")
+            self.logger.info(f"Loading discriminator weights from: {pretrained_path_disc} ...")
         else:
-            print(f"Loading model weights from: {pretrained_path} ...")
+            print(f"Loading generator weights from: {pretrained_path_gen} ...")
+            print(f"Loading discriminator weights from: {pretrained_path_disc} ...")
 
-        checkpoint = torch.load(pretrained_path, map_location=self.device)
-
-        if checkpoint.get("state_dict_gen") is not None and checkpoint.get("state_dict_disc") is not None:
-            self.model_gen.load_state_dict(checkpoint["state_dict_gen"])
-            self.model_disc.load_state_dict(checkpoint["state_dict_disc"])
+        # Load generator checkpoint
+        checkpoint_gen = torch.load(pretrained_path_gen, map_location=self.device, weights_only=True)
+        if "state_dict_gen" in checkpoint_gen:
+            self.model_gen.load_state_dict(checkpoint_gen["state_dict_gen"])
+        elif "params_ema" in checkpoint_gen:
+            self.model_gen.load_state_dict(checkpoint_gen["params_ema"])
         else:
-            # If pretrained file does not have state_dict keys for both models, raise error
-            raise ValueError(f"Pretrained checkpoint must contain state_dict for both generator and discriminator.")
+            self.model_gen.load_state_dict(checkpoint_gen)  # Assuming it's a direct state dict
+
+        # Load discriminator checkpoint
+        checkpoint_disc = torch.load(pretrained_path_disc, map_location=self.device, weights_only=True)
+        if "state_dict_disc" in checkpoint_disc:
+            self.model_disc.load_state_dict(checkpoint_disc["state_dict_disc"])
+        elif "params" in checkpoint_disc:
+            self.model_disc.load_state_dict(checkpoint_disc["params"])
+        else:
+            self.model_disc.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict

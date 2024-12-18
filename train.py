@@ -39,9 +39,9 @@ def main(config):
 
     # build model architecture, then print to console
     model_gen = instantiate(config.model_gen).to(device)
-    logger.info(model_gen)
+    # logger.info(model_gen)
     model_disc = instantiate(config.model_disc).to(device)
-    logger.info(model_disc)
+    # logger.info(model_disc)
     # get function handles of loss and metrics
     loss_function_gen = instantiate(config.loss_function_gen).to(device)
     loss_function_disc = instantiate(config.loss_function_disc).to(device)
