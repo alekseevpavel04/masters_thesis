@@ -214,8 +214,12 @@ class BaseTrainer:
         self.train_metrics.reset()
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
+
+        # Initialize variable for storing the last batch's metrics
+        last_train_metrics = {}
+
         for batch_idx, batch in enumerate(
-            tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
+                tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
         ):
             try:
                 batch = self.process_batch(
@@ -230,9 +234,14 @@ class BaseTrainer:
                 else:
                     raise e
 
-            self.train_metrics.update("grad_norm", self._get_grad_norm())
+            # Get gradient norms for both generator and discriminator
+            grad_norm_gen, grad_norm_disc = self._get_grad_norm()
 
-            # log current results
+            # Log gradient norms
+            self.train_metrics.update("grad_norm_gen", grad_norm_gen)
+            self.train_metrics.update("grad_norm_disc", grad_norm_disc)
+
+            # Log current results periodically
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
                 self.logger.debug(
@@ -240,15 +249,13 @@ class BaseTrainer:
                         epoch, self._progress(batch_idx), batch["loss"].item()
                     )
                 )
-                self.writer.add_scalar(
-                    "learning rate", self.lr_scheduler.get_last_lr()[0]
-                )
+                self.writer.add_scalar("learning rate gen", self.lr_scheduler_gen.get_last_lr()[0])
+                self.writer.add_scalar("learning rate disc", self.lr_scheduler_disc.get_last_lr()[0])
                 self._log_scalars(self.train_metrics)
                 self._log_batch(batch_idx, batch)
-                # we don't want to reset train metrics at the start of every epoch
-                # because we are interested in recent train metrics
                 last_train_metrics = self.train_metrics.result()
                 self.train_metrics.reset()
+
             if batch_idx + 1 >= self.epoch_len:
                 break
 
@@ -399,22 +406,34 @@ class BaseTrainer:
     @torch.no_grad()
     def _get_grad_norm(self, norm_type=2):
         """
-        Calculates the gradient norm for logging.
+        Calculates the gradient norm for logging, now for both the generator and the discriminator.
 
         Args:
             norm_type (float | str | None): the order of the norm.
         Returns:
-            total_norm (float): the calculated norm.
+            total_norm_gen (float), total_norm_disc (float): the calculated norm for generator and discriminator.
         """
-        parameters = self.model.parameters()
-        if isinstance(parameters, torch.Tensor):
-            parameters = [parameters]
-        parameters = [p for p in parameters if p.grad is not None]
-        total_norm = torch.norm(
-            torch.stack([torch.norm(p.grad.detach(), norm_type) for p in parameters]),
+        # Calculate gradient norm for generator
+        gen_parameters = self.model_gen.parameters()
+        if isinstance(gen_parameters, torch.Tensor):
+            gen_parameters = [gen_parameters]
+        gen_parameters = [p for p in gen_parameters if p.grad is not None]
+        total_norm_gen = torch.norm(
+            torch.stack([torch.norm(p.grad.detach(), norm_type) for p in gen_parameters]),
             norm_type,
         )
-        return total_norm.item()
+
+        # Calculate gradient norm for discriminator
+        disc_parameters = self.model_disc.parameters()
+        if isinstance(disc_parameters, torch.Tensor):
+            disc_parameters = [disc_parameters]
+        disc_parameters = [p for p in disc_parameters if p.grad is not None]
+        total_norm_disc = torch.norm(
+            torch.stack([torch.norm(p.grad.detach(), norm_type) for p in disc_parameters]),
+            norm_type,
+        )
+
+        return total_norm_gen.item(), total_norm_disc.item()
 
     def _progress(self, batch_idx):
         """

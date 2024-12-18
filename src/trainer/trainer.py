@@ -1,3 +1,6 @@
+#TODO Clean batch (delete hr)
+
+
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 from src.degradation import ImageDegrader
@@ -97,16 +100,16 @@ class Trainer(BaseTrainer):
 
     def _log_batch(self, batch_idx, batch, mode="train"):
         if mode == "train":
-            self.writer.add_scalar("train/gen_loss", batch["gen_loss"].item(), batch_idx)
-            self.writer.add_scalar("train/disc_loss", batch["disc_loss"].item(), batch_idx)
+            self.writer.add_scalar("train/gen_loss", batch["gen_loss"].item())
+            self.writer.add_scalar("train/disc_loss", batch["disc_loss"].item())
 
             if batch_idx % self.log_step == 0:
-                self.writer.add_images("train/real", batch["data_object"], batch_idx)
-                self.writer.add_images("train/generated", batch["gen_output"], batch_idx)
-                self.writer.add_images("train/low_res", batch["lr_image"], batch_idx)
+                self.writer.add_images("train/real", batch["data_object"])
+                self.writer.add_images("train/generated", batch["gen_output"])
+                self.writer.add_images("train/low_res", batch["lr_image"])
         else:
-            self.writer.add_scalar("val/gen_loss", batch["gen_loss"].item(), batch_idx)
-            self.writer.add_scalar("val/disc_loss", batch["disc_loss"].item(), batch_idx)
-            self.writer.add_images("val/real", batch["data_object"], batch_idx)
-            self.writer.add_images("val/generated", batch["gen_output"], batch_idx)
-            self.writer.add_images("val/low_res", batch["lr_image"], batch_idx)
+            self.writer.add_scalar("val/gen_loss", batch["gen_loss"].item())
+            self.writer.add_scalar("val/disc_loss", batch["disc_loss"].item())
+            self.writer.add_images("val/real", batch["data_object"])
+            self.writer.add_images("val/generated", batch["gen_output"])
+            self.writer.add_images("val/low_res", batch["lr_image"])

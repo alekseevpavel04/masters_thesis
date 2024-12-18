@@ -2,7 +2,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-
+import torch
 
 class WandBWriter:
     """
@@ -221,7 +221,28 @@ class WandBWriter:
         )
 
     def add_images(self, image_names, images):
-        raise NotImplementedError()
+        """
+        Log multiple images to the experiment tracker.
+
+        Args:
+            image_names (str): name for the images.
+            images (list of Image or ndarray): list of images to log.
+        """
+        # Преобразуем тензор в numpy массив, если это необходимо
+        if isinstance(images, torch.Tensor):
+            images = images.detach().cpu().numpy()  # Преобразуем тензор в ndarray
+            images = np.moveaxis(images, 1, -1)  # Перемещаем каналы в конец (если необходимо)
+
+        # Проверяем, что переданное значение является списком или ndarray
+        if isinstance(images, np.ndarray) and len(images.shape) >= 3:  # (batch_size, height, width, channels)
+            images = [self.wandb.Image(img) for img in images]  # Преобразуем каждое изображение в wandb.Image
+        elif isinstance(images, list):
+            images = [self.wandb.Image(img) for img in images]  # Если это список изображений
+        else:
+            raise ValueError("images should be a list or ndarray of images.")
+
+        # Логируем изображения в WandB
+        self.wandb.log({self._object_name(image_names): images}, step=self.step)
 
     def add_pr_curve(self, curve_name, curve):
         raise NotImplementedError()

@@ -35,8 +35,12 @@ class MetricTracker:
             value (float): metric value on the batch.
             n (int): how many times to count this value.
         """
-        # if self.writer is not None:
-        #     self.writer.add_scalar(key, value)
+        # Ensure the metric exists before trying to update it
+        if key not in self._data.index:
+            # If not, add the new key with initialized values
+            self._data.loc[key] = [0.0, 0, 0.0]
+
+        # Update the metric
         self._data.loc[key, "total"] += value * n
         self._data.loc[key, "counts"] += n
         self._data.loc[key, "average"] = self._data.total[key] / self._data.counts[key]
