@@ -18,11 +18,15 @@ class CustomDataset(BaseDataset):
     The images will be treated as part of a generic class.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dataset_name="dataset-nano", username="alekseevpavel", *args, **kwargs):
         """
         Args:
+            dataset_name (str): name of the dataset
+            username (str): Kaggle username
             name (str): partition name (default 'train', but we won't use it)
         """
+        self.dataset_name = dataset_name
+        self.username = username
         index_path = ROOT_PATH / "data" / "custom" / "index.json"
 
         # If the index file exists, load it; otherwise, create it.
@@ -49,7 +53,7 @@ class CustomDataset(BaseDataset):
         data_path.mkdir(exist_ok=True, parents=True)
 
         # Define the path where the zip file is located
-        zip_file = ROOT_PATH / "data" / "dataset-nano.zip"
+        zip_file = ROOT_PATH / "data" / f"{self.dataset_name}.zip"
 
         # Check if the dataset zip file exists, and if not, download it
         if not zip_file.exists():
@@ -91,7 +95,7 @@ class CustomDataset(BaseDataset):
         """
         Download the dataset from Kaggle using the Kaggle CLI command.
         """
-        dataset_name = "alekseevpavel/dataset-nano"  # Update this to the correct Kaggle dataset identifier
+        dataset_name = f"{self.username}/{self.dataset_name}"  # Using the configured username and dataset name
         try:
             # Execute the kaggle command to download the dataset
             subprocess.run(
