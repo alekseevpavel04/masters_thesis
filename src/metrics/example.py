@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from src.metrics.base_metric import BaseMetric
 
 
