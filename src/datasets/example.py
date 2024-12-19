@@ -18,15 +18,11 @@ class CustomDataset(BaseDataset):
     The images will be treated as part of a generic class.
     """
 
-    def __init__(self, dataset_name="dataset-nano", username="alekseevpavel", *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Args:
-            dataset_name (str): name of the dataset
-            username (str): Kaggle username
             name (str): partition name (default 'train', but we won't use it)
         """
-        self.dataset_name = dataset_name
-        self.username = username
         index_path = ROOT_PATH / "data" / "custom" / "index.json"
 
         # If the index file exists, load it; otherwise, create it.
@@ -42,7 +38,6 @@ class CustomDataset(BaseDataset):
         Create index for the dataset. The function processes dataset metadata
         and utilizes it to get information dict for each element of
         the dataset.
-
         Returns:
             index (list[dict]): list, containing dict for each element of
                 the dataset. The dict has required metadata information,
@@ -53,7 +48,7 @@ class CustomDataset(BaseDataset):
         data_path.mkdir(exist_ok=True, parents=True)
 
         # Define the path where the zip file is located
-        zip_file = ROOT_PATH / "data" / f"{self.dataset_name}.zip"
+        zip_file = ROOT_PATH / "data" / "sr-dataset.zip"
 
         # Check if the dataset zip file exists, and if not, download it
         if not zip_file.exists():
@@ -61,10 +56,10 @@ class CustomDataset(BaseDataset):
             self._download_dataset()
 
         # Unzip the dataset if it has not been unzipped
-        if not (data_path / "dataset_nano").exists():
+        if not (data_path / "SR_dataset").exists():
             self._unzip_dataset(zip_file, data_path)
 
-        image_folder = data_path / "dataset_nano"
+        image_folder = data_path / "SR_dataset"
         image_files = [f for f in image_folder.glob("*") if f.is_file()]
 
         print(f"Parsing custom dataset metadata...")
@@ -73,13 +68,11 @@ class CustomDataset(BaseDataset):
             # Save the original image in the same format as the input
             save_path = image_folder / f"{i:06}{img_path.suffix}"  # Keep the original extension (e.g., .jpg, .png)
             img = Image.open(img_path)
-
             # Save the image in the same format as it was originally
             img.save(save_path)
 
             # Remove the original image file
             os.remove(img_path)
-
             # Add metadata for this image to the index (without 'label')
             index.append({"path": str(save_path)})
 
@@ -95,7 +88,7 @@ class CustomDataset(BaseDataset):
         """
         Download the dataset from Kaggle using the Kaggle CLI command.
         """
-        dataset_name = f"{self.username}/{self.dataset_name}"  # Using the configured username and dataset name
+        dataset_name = "alekseevpavel/sr-dataset"  # Update this to the correct Kaggle dataset identifier
         try:
             # Execute the kaggle command to download the dataset
             subprocess.run(
@@ -109,7 +102,6 @@ class CustomDataset(BaseDataset):
     def _unzip_dataset(self, zip_file, data_path):
         """
         Unzips the dataset into the specified directory.
-
         Args:
             zip_file (Path): path to the zip file.
             data_path (Path): directory where to unzip the data.
@@ -122,7 +114,6 @@ class CustomDataset(BaseDataset):
     def _cleanup(self, zip_file):
         """
         Remove the zip file after the dataset has been unzipped.
-
         Args:
             zip_file (Path): path to the zip file.
         """
@@ -133,7 +124,6 @@ class CustomDataset(BaseDataset):
     def load_img(self, path):
         """
         Load image from disk and convert it to tensor.
-
         Args:
             path (str): path to the image.
         Returns:
