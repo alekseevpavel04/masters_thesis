@@ -120,10 +120,11 @@ class Inferencer(BaseTrainer):
 
         # Log images at specified intervals
         if self.writer is not None and batch_idx % self.log_step == 0:
-            self.writer.set_step(batch_idx, part)  # Important: Set the step
-            self.writer.add_images(f"{part}/original", batch["data_object"])
-            self.writer.add_images(f"{part}/generated", batch["gen_output"])
-            self.writer.add_images(f"{part}/low_res", batch["lr_image"])
+            self.writer.set_step(batch_idx, part)  # устанавливаем шаг
+            # Берем только первое изображение из батча [0:1]
+            self.writer.add_images(f"{part}/original", batch["data_object"][0:1])
+            self.writer.add_images(f"{part}/generated", batch["gen_output"][0:1])
+            self.writer.add_images(f"{part}/low_res", batch["lr_image"][0:1])
 
         # Save generated images and original high-res images
         batch_size = batch["gen_output"].shape[0]
@@ -175,10 +176,3 @@ class Inferencer(BaseTrainer):
                 self._log_scalars(self.evaluation_metrics)
 
         return self.evaluation_metrics.result()
-
-    def _log_batch(self, batch_idx, batch):
-        if batch_idx % self.log_step == 0:
-            print('Im here')
-            self.writer.add_images("val/real", batch["data_object"])
-            self.writer.add_images("val/generated", batch["gen_output"])
-            self.writer.add_images("val/low_res", batch["lr_image"])
