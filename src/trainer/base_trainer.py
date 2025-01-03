@@ -579,23 +579,27 @@ class BaseTrainer:
 
         self.logger.info(f"Checkpoint loaded. Resume training from epoch {self.start_epoch}")
 
-    def _from_pretrained(self, pretrained_path_gen, pretrained_path_disc):
+    def _from_pretrained(self, pretrained_path_gen, pretrained_path_disc=None, mode="Train"):
         """
-        Init models (both generator and discriminator) with weights from pretrained files.
+        Init models with weights from pretrained files.
 
         Args:
             pretrained_path_gen (str): path to the generator model state dict.
-            pretrained_path_disc (str): path to the discriminator model state dict.
+            pretrained_path_disc (str | None): path to the discriminator model state dict.
+                Required for Train mode, ignored for Inference mode.
+            mode (str): "Train" or "Inference". In Inference mode, only generator
+                weights are loaded.
         """
         pretrained_path_gen = str(pretrained_path_gen)
-        pretrained_path_disc = str(pretrained_path_disc)
 
         if hasattr(self, "logger"):  # to support both trainer and inferencer
             self.logger.info(f"Loading generator weights from: {pretrained_path_gen} ...")
-            self.logger.info(f"Loading discriminator weights from: {pretrained_path_disc} ...")
+            if mode == "Train" and pretrained_path_disc is not None:
+                self.logger.info(f"Loading discriminator weights from: {pretrained_path_disc} ...")
         else:
             print(f"Loading generator weights from: {pretrained_path_gen} ...")
-            print(f"Loading discriminator weights from: {pretrained_path_disc} ...")
+            if mode == "Train" and pretrained_path_disc is not None:
+                print(f"Loading discriminator weights from: {pretrained_path_disc} ...")
 
         # Load generator checkpoint
         checkpoint_gen = torch.load(pretrained_path_gen, map_location=self.device, weights_only=True)
@@ -606,11 +610,13 @@ class BaseTrainer:
         else:
             self.model_gen.load_state_dict(checkpoint_gen)  # Assuming it's a direct state dict
 
-        # Load discriminator checkpoint
-        checkpoint_disc = torch.load(pretrained_path_disc, map_location=self.device, weights_only=True)
-        if "state_dict_disc" in checkpoint_disc:
-            self.model_disc.load_state_dict(checkpoint_disc["state_dict_disc"])
-        elif "params" in checkpoint_disc:
-            self.model_disc.load_state_dict(checkpoint_disc["params"])
-        else:
-            self.model_disc.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict
+        # Load discriminator checkpoint only in Train mode
+        if mode == "Train" and pretrained_path_disc is not None:
+            pretrained_path_disc = str(pretrained_path_disc)
+            checkpoint_disc = torch.load(pretrained_path_disc, map_location=self.device, weights_only=True)
+            if "state_dict_disc" in checkpoint_disc:
+                self.model_disc.load_state_dict(checkpoint_disc["state_dict_disc"])
+            elif "params" in checkpoint_disc:
+                self.model_disc.load_state_dict(checkpoint_disc["params"])
+            else:
+                self.model_disc.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict

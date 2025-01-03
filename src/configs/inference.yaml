@@ -1,0 +1,25 @@
+defaults:
+  - model_gen: gen
+  - writer: wandb
+  - metrics: inference
+  - datasets: inference
+  - dataloader: inference
+  - transforms: inference
+  - _self_
+
+
+inferencer:
+  device_tensors: ["data_object"]  # which tensors should be on device (ex. GPU)
+  device: auto  # device name or "auto"
+  override: True  # if True, will override the previous run with the same name
+  save_path: "inference"  # path for saving inference results
+  save_dir: "saved/models"  # directory for saving logs and checkpoints
+  seed: 1
+  from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
+  resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
+  log_step: 50  # how often to log images during inference
+
+writer:  # make sure this section matches your wandb.yaml configuration
+  run_name: "inference_run"  # name for this inference run
+  id_length: 8  # length of the generated run ID
+  log_checkpoints: false  # whether to log checkpoints to wandb

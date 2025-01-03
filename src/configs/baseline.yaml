@@ -2,10 +2,10 @@ defaults:
   - model_gen: gen
   - model_disc: disc
   - writer: wandb
-  - metrics: example
-  - datasets: example
-  - dataloader: example
-  - transforms: example
+  - metrics: train
+  - datasets: train
+  - dataloader: train
+  - transforms: train
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam

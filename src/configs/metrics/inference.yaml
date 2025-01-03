@@ -1,0 +1,11 @@
+device: "auto"
+inference:
+  - _target_: src.metrics.PSNRMetric
+    name: "test_PSNR"
+    device: "auto"
+  - _target_: src.metrics.SSIMMetric
+    name: "test_SSIM"
+    device: "auto"
+  - _target_: src.metrics.ContentLossMetric
+    name: "test_ContentLoss"
+    device: "auto"
