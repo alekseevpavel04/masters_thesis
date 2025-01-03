@@ -9,10 +9,10 @@ defaults:
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
-  lr: 3e-4
+  lr: 3e-7
 optimizer_disc:
   _target_: torch.optim.Adam
-  lr: 3e-4
+  lr: 3e-7
 lr_scheduler_gen:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.9

@@ -58,7 +58,8 @@ class Trainer(BaseTrainer):
             batch["gen_output"] = self.model_gen(batch["lr_image"])
 
             # Get discriminator predictions for generator training
-            disc_fake = self.model_disc(batch["gen_output"])
+            with torch.no_grad():
+                disc_fake = self.model_disc(batch["gen_output"])
 
             # Calculate generator losses
             batch["gen_loss"] = self.criterion_gen(disc_fake, True)

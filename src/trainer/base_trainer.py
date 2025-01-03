@@ -222,9 +222,8 @@ class BaseTrainer:
         # Initialize variable for storing the last batch's metrics
         last_train_metrics = {}
 
-        for batch_idx, batch in enumerate(
-                tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
-        ):
+        pbar = tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
+        for batch_idx, batch in enumerate(pbar):
             try:
                 batch = self.process_batch(
                     batch,
@@ -240,6 +239,11 @@ class BaseTrainer:
 
             # Get gradient norms for both generator and discriminator
             grad_norm_gen, grad_norm_disc = self._get_grad_norm()
+
+            # Update progress bar description with metrics while keeping the progress bar
+            pbar.set_description(
+                f"train | loss: {batch['loss'].item():.3f} | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
+            )
 
             # Log gradient norms only for specific logging
             self.train_metrics.update("grad_norm_gen", grad_norm_gen)
