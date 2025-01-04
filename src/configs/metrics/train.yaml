@@ -1,21 +1,21 @@
 device: "auto"
 train: # metrics that are calculated during training
   - _target_: src.metrics.PSNRMetric
-    name: "TRAIN_PSNR"
+    name: "PSNR"
     device: "auto"
   - _target_: src.metrics.SSIMMetric
-    name: "TRAIN_SSIM"
+    name: "SSIM"
     device: "auto"
   - _target_: src.metrics.ContentLossMetric
-    name: "TRAIN_ContentLoss"
+    name: "ContentLoss"
     device: "auto"
 inference: # metrics that are calculated during training
   - _target_: src.metrics.PSNRMetric
-    name: "TRAIN_PSNR"
+    name: "PSNR"
     device: "auto"
   - _target_: src.metrics.SSIMMetric
-    name: "TRAIN_SSIM"
+    name: "SSIM"
     device: "auto"
   - _target_: src.metrics.ContentLossMetric
-    name: "TRAIN_ContentLoss"
+    name: "ContentLoss"
     device: "auto"

@@ -31,7 +31,7 @@ class BaseTrainer:
         dataloaders,
         logger,
         writer,
-        disc_steps = 5,
+        disc_steps = None,
         epoch_len=None,
         skip_oom=True,
         batch_transforms=None,
