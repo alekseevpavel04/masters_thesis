@@ -108,7 +108,8 @@ class ImageDegrader:
     def apply_resize(self, tensor):
         """Apply 2x downscale with random interpolation method"""
         mode = random.choice(['bilinear', 'bicubic', 'area'])
-        return F.interpolate(tensor, scale_factor=0.5, mode=mode)
+        out = F.interpolate(tensor, scale_factor=0.5, mode=mode)
+        return torch.clamp(out, 0, 1)  # Add clipping after resize
 
     def apply_noise(self, tensor, noise_prob, noise_range):
         """Apply random noise to tensor"""
@@ -134,6 +135,7 @@ class ImageDegrader:
         # Apply transformations
         out = self.apply_resize(out)
         out = filter2D(out, kernel1)
+        out = torch.clamp(out, 0, 1)  # Add clipping in case if random.random() >= noise_prob
         out = self.apply_noise(out, self.gaussian_noise_prob, self.noise_range)
 
         # Second degradation (optional)

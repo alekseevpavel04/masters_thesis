@@ -109,8 +109,8 @@ class Trainer(BaseTrainer):
                 self.writer.add_images("train/generated", batch["gen_output"][0:1])
                 self.writer.add_images("train/low_res", batch["lr_image"][0:1])
         else:
-            self.writer.add_scalar("val/gen_loss", batch["gen_loss"].item())
-            self.writer.add_scalar("val/disc_loss", batch["disc_loss"].item())
             self.writer.add_images("val/real", batch["data_object"][0:1])
             self.writer.add_images("val/generated", batch["gen_output"][0:1])
             self.writer.add_images("val/low_res", batch["lr_image"][0:1])
+            self.writer.add_scalar("val/gen_loss", batch["gen_loss"].item())
+            self.writer.add_scalar("val/disc_loss", batch["disc_loss"].item())

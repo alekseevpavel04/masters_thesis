@@ -127,20 +127,20 @@ class Inferencer(BaseTrainer):
             self.writer.add_images(f"{part}/low_res", batch["lr_image"][0:1])
 
         # Save generated images and original high-res images
-        batch_size = batch["gen_output"].shape[0]
-        current_id = batch_idx * batch_size
-
-        for i in range(batch_size):
-            output = {
-                "original_hr": batch["data_object"][i].clone(),
-                "generated_hr": batch["gen_output"][i].clone(),
-                "input_lr": batch["lr_image"][i].clone(),
-            }
-
-            if self.save_path is not None:
-                torch.save(output, self.save_path / part / f"output_{current_id + i}.pth")
-
-        return batch
+        # batch_size = batch["gen_output"].shape[0]
+        # current_id = batch_idx * batch_size
+        #
+        # for i in range(batch_size):
+        #     output = {
+        #         "original_hr": batch["data_object"][i].clone(),
+        #         "generated_hr": batch["gen_output"][i].clone(),
+        #         "input_lr": batch["lr_image"][i].clone(),
+        #     }
+        #
+        #     if self.save_path is not None:
+        #         torch.save(output, self.save_path / part / f"output_{current_id + i}.pth")
+        #
+        # return batch
 
     def _inference_part(self, part, dataloader):
         """

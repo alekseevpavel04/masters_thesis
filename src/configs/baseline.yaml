@@ -28,7 +28,7 @@ loss_function_disc:
 trainer:
   log_step: 50
   n_epochs: 2
-  epoch_len: 10
+  epoch_len: 50
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml

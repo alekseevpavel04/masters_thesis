@@ -83,7 +83,7 @@ class RRDBNet(nn.Module):
         fea = self.lrelu(self.conv_up2(F.interpolate(fea, scale_factor=2, mode='nearest')))
         out = self.conv_last(self.lrelu(self.conv_hr(fea)))
 
-        return out
+        return torch.clamp(out, 0, 1)
 
 
 def pixel_unshuffle(x, scale):
