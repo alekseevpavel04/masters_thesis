@@ -23,3 +23,23 @@ src/utils/__pycache__/
 
 # Виртуальное окружение
 venv/
+venv_win/
+
+# Изображения и видео
+/dataset_building/**/*.jpg
+/dataset_building/**/*.jpeg
+/dataset_building/**/*.png
+/dataset_building/**/*.gif
+/dataset_building/**/*.mp4
+/dataset_building/**/*.mov
+/dataset_building/**/*.avi
+/dataset_building/**/*.mkv
+/dataset_building/**/*.webm
+/dataset_building/dataset_preparation/SR_dataset_test
+/dataset_building/dataset_preparation/SR_dataset_test.zip
+/dataset_building/dataset_preparation/SR_dataset_val
+/dataset_building/dataset_preparation/SR_dataset_val.zip
+
+# Логи
+/dataset_building/dataset_preparation/logs/*.log
+
