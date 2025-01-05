@@ -1,1 +1,1 @@
-from src.metrics.example import PSNRMetric, SSIMMetric, ContentLossMetric
+from src.metrics.main_metrics import PSNRMetric, SSIMMetric, ContentLossMetric, LPIPSMetric

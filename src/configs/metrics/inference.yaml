@@ -9,3 +9,6 @@ inference:
   - _target_: src.metrics.ContentLossMetric
     name: "ContentLoss"
     device: "auto"
+  - _target_: src.metrics.LPIPSMetric
+    name: "LPIPSMetric"
+    device: "auto"

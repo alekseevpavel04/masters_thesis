@@ -9,6 +9,10 @@ train: # metrics that are calculated during training
   - _target_: src.metrics.ContentLossMetric
     name: "ContentLoss"
     device: "auto"
+  - _target_: src.metrics.LPIPSMetric
+    name: "LPIPSMetric"
+    device: "auto"
+
 inference: # metrics that are calculated during training
   - _target_: src.metrics.PSNRMetric
     name: "PSNR"
@@ -18,4 +22,7 @@ inference: # metrics that are calculated during training
     device: "auto"
   - _target_: src.metrics.ContentLossMetric
     name: "ContentLoss"
+    device: "auto"
+  - _target_: src.metrics.LPIPSMetric
+    name: "LPIPSMetric"
     device: "auto"
