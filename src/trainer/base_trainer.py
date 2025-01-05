@@ -32,6 +32,7 @@ class BaseTrainer:
         logger,
         writer,
         disc_steps = None,
+        gradient_accumulation_steps = None,
         epoch_len=None,
         skip_oom=True,
         batch_transforms=None,
@@ -82,6 +83,7 @@ class BaseTrainer:
 
         self.batch_transforms = batch_transforms
         self.disc_steps = disc_steps
+        self.gradient_accumulation_steps = gradient_accumulation_steps
 
         # define dataloaders
         self.train_dataloader = dataloaders["train"]
@@ -242,7 +244,7 @@ class BaseTrainer:
 
             # Update progress bar description with metrics while keeping the progress bar
             pbar.set_description(
-                f"train | loss: {batch['loss'].item():.3f} | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
+                f"train | sum_loss: {batch['loss'].item():.3f} | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
             )
 
             # Log gradient norms only for specific logging
@@ -256,8 +258,11 @@ class BaseTrainer:
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
                 self.logger.debug(
-                    "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
+                    "Train Epoch: {} {} | Gen Loss: {:.6f} | Disc Loss: {:.6f}".format(
+                        epoch,
+                        self._progress(batch_idx),
+                        batch["gen_loss"].item(),
+                        batch["disc_loss"].item()
                     )
                 )
                 self.writer.add_scalar("learning rate gen", self.lr_scheduler_gen.get_last_lr()[0])
@@ -310,7 +315,14 @@ class BaseTrainer:
                 batch_idx, batch, part
             )  # log only the last batch during inference
 
-        return self.evaluation_metrics.result()
+        result = self.evaluation_metrics.result()
+        # Удаляем gen_loss и disc_loss из результатов валидации
+        if 'gen_loss' in result:
+            del result['gen_loss']
+        if 'disc_loss' in result:
+            del result['disc_loss']
+
+        return result
 
     def _monitor_performance(self, logs, not_improved_count):
         """

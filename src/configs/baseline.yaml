@@ -28,7 +28,7 @@ loss_function_disc:
 trainer:
   log_step: 50
   n_epochs: 2
-  epoch_len: 50
+  epoch_len: 10
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
@@ -42,3 +42,4 @@ trainer:
   from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
   from_pretrained_disc: "assets/weights/RealESRGAN_x2plus_netD.pth"
   max_grad_norm: 10
+  gradient_accumulation_steps: 10

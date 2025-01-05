@@ -1,6 +1,3 @@
-#TODO Fix saving
-
-
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
 from src.degradation import ImageDegrader
@@ -8,10 +5,21 @@ import torch
 
 
 class Trainer(BaseTrainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, gradient_accumulation_steps=1, **kwargs):
         super().__init__(*args, **kwargs)
-        self.degrader = ImageDegrader(mode='batch', device=self.device)  # Передаем device в ImageDegrader
+        self.degrader = ImageDegrader(mode='batch', device=self.device)
         self.content_weight = 1.0
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.current_accumulation_step = 0
+
+    def _reset_accumulation_step(self):
+        """Reset gradient accumulation counter"""
+        self.current_accumulation_step = 0
+
+    def _train_epoch(self, epoch):
+        # Reset accumulation step at the start of each epoch
+        self._reset_accumulation_step()
+        return super()._train_epoch(epoch)
 
     def process_batch(self, batch, metrics: MetricTracker):
         batch = self.move_batch_to_device(batch)
@@ -23,7 +31,9 @@ class Trainer(BaseTrainer):
 
             # Train Discriminator
             for _ in range(self.disc_steps):
-                self.optimizer_disc.zero_grad()
+                # Zero gradients only at the start of accumulation
+                if self.current_accumulation_step == 0:
+                    self.optimizer_disc.zero_grad()
 
                 # Generate low resolution images
                 lr_image = self.degrader.process_batch(batch["data_object"])
@@ -42,13 +52,21 @@ class Trainer(BaseTrainer):
                 disc_loss_real = self.criterion_disc(disc_real, True)
                 batch["disc_loss"] = (disc_loss_fake + disc_loss_real) * 0.5
 
-                # Backward pass for discriminator
-                batch["disc_loss"].backward()
+                # Scale loss by accumulation steps
+                scaled_disc_loss = batch["disc_loss"] / self.gradient_accumulation_steps
+                scaled_disc_loss.backward()
+
+                # Clip gradients after each backward pass
                 self._clip_grad_norm(self.model_disc)
-                self.optimizer_disc.step()
+
+                # Only update weights after accumulating enough gradients
+                if (self.current_accumulation_step + 1) % self.gradient_accumulation_steps == 0:
+                    self.optimizer_disc.step()
 
             # Train Generator
-            self.optimizer_gen.zero_grad()
+            # Zero gradients only at the start of accumulation
+            if self.current_accumulation_step == 0:
+                self.optimizer_gen.zero_grad()
 
             # Generate new fake samples
             lr_image = self.degrader.process_batch(batch["data_object"])
@@ -68,12 +86,21 @@ class Trainer(BaseTrainer):
             content_loss = torch.nn.functional.l1_loss(batch["gen_output"], batch["data_object"])
             batch["gen_loss"] += self.content_weight * content_loss
 
-            # Backward pass for generator
-            batch["gen_loss"].backward()
-            self._clip_grad_norm(self.model_gen)
-            self.optimizer_gen.step()
+            # Scale loss by accumulation steps
+            scaled_gen_loss = batch["gen_loss"] / self.gradient_accumulation_steps
+            scaled_gen_loss.backward()
 
-            # Combine losses for logging
+            # Clip gradients after each backward pass
+            self._clip_grad_norm(self.model_gen)
+
+            # Only update weights after accumulating enough gradients
+            if (self.current_accumulation_step + 1) % self.gradient_accumulation_steps == 0:
+                self.optimizer_gen.step()
+
+            # Update accumulation step counter
+            self.current_accumulation_step = (self.current_accumulation_step + 1) % self.gradient_accumulation_steps
+
+            # Combine losses for logging (use unscaled losses)
             batch["loss"] = batch["gen_loss"] + batch["disc_loss"]
 
         else:
@@ -101,9 +128,6 @@ class Trainer(BaseTrainer):
 
     def _log_batch(self, batch_idx, batch, mode="train"):
         if mode == "train":
-            self.writer.add_scalar("train/gen_loss", batch["gen_loss"].item())
-            self.writer.add_scalar("train/disc_loss", batch["disc_loss"].item())
-
             if batch_idx % self.log_step == 0:
                 self.writer.add_images("train/real", batch["data_object"][0:1])
                 self.writer.add_images("train/generated", batch["gen_output"][0:1])
@@ -112,5 +136,3 @@ class Trainer(BaseTrainer):
             self.writer.add_images("val/real", batch["data_object"][0:1])
             self.writer.add_images("val/generated", batch["gen_output"][0:1])
             self.writer.add_images("val/low_res", batch["lr_image"][0:1])
-            self.writer.add_scalar("val/gen_loss", batch["gen_loss"].item())
-            self.writer.add_scalar("val/disc_loss", batch["disc_loss"].item())

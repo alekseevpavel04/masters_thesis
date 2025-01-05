@@ -60,6 +60,7 @@ def main(config):
     # epoch_len = None or len(dataloader) for epoch-based training
     epoch_len = config.trainer.get("epoch_len")
     disc_steps = config.trainer.get("disc_steps")
+    gradient_accumulation_steps = config.trainer.get("gradient_accumulation_steps")
 
     trainer = Trainer(
         model_gen=model_gen,
@@ -79,6 +80,7 @@ def main(config):
         writer=writer,
         batch_transforms=batch_transforms,
         disc_steps = disc_steps,
+        gradient_accumulation_steps = gradient_accumulation_steps,
         skip_oom=config.trainer.get("skip_oom", True),
     )
 
