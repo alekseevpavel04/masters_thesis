@@ -12,7 +12,7 @@ from src.datasets.base_dataset import BaseDataset
 from src.utils.io_utils import ROOT_PATH, read_json, write_json
 
 
-class CustomDataset(BaseDataset):
+class CustomDataset_train(BaseDataset):
     """
     Custom dataset for images downloaded from Kaggle dataset (with no labels).
     The images will be treated as part of a generic class.
