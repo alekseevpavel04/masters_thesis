@@ -1,7 +1,7 @@
 # masters_thesis
 
 
-### Список использованных аниме для создания датасета
+### Список использованных аниме для создания датасета (train)
 
 - **Jujutsu Kaisen S2** - Серии: 1, 5, 8, 12, 16, 21
 - **Oshi No Ko S2** - Серии: 1, 4, 8, 10
@@ -38,6 +38,20 @@
 **Итог:**  
 59388 .png файлов, общий объём: 116 Гб
 
+**val:**
+- Dandadan - Серии: 3, 10
+- Spy x Family - Серии: 2, 8
+- Bocchi the Rock - Серии: 3, 8
+- Tengoku Daimakyou - Серии: 1, 9
+- Lycoris Recoil - Серии: 3, 12
+
+**test:**
+- One Piece Fan Letter - Серии: 1
+- Dandadan - Серии: 6, 12
+- Spy x Family - Серии: 5, 11
+- Bocchi the Rock - Серии: 5, 11
+- Tengoku Daimakyou - Серии: 5, 13
+- Lycoris Recoil - Серии: 7
 
 ---
 
