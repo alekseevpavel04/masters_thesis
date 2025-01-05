@@ -59,6 +59,10 @@
 - Tengoku Daimakyou - Серии: 5, 13
 - Lycoris Recoil - Серии: 7
 
+2025-01-05 23:04:18,882 - tools.image_filter_ResNet - INFO - Selected 524 images for removal based on evaluation scores.
+2025-01-05 23:04:18,883 - tools.image_filter_ResNet - INFO - Fraction of images removed: 3.16%
+2025-01-05 23:13:51,474 - ImageDeduplicator - INFO - Удалено 4779 дубликатов из 14182 изображений. Доля удаленных: 33.70%
+
 ---
 
 
