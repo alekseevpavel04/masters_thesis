@@ -1,7 +1,6 @@
 import warnings
-
-import hydra
 import torch
+import hydra
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
@@ -9,7 +8,17 @@ from src.datasets.data_utils import get_dataloaders
 from src.trainer import Trainer
 from src.utils.init_utils import set_random_seed, setup_saving_and_logging
 
-warnings.filterwarnings("ignore", category=UserWarning)
+
+def count_parameters(model):
+    """
+    Count number of trainable parameters in the model
+
+    Args:
+        model: PyTorch model
+    Returns:
+        int: Number of trainable parameters
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="baseline")
@@ -34,14 +43,20 @@ def main(config):
         device = config.trainer.device
 
     # setup data_loader instances
-    # batch_transforms should be put on device
     dataloaders, batch_transforms = get_dataloaders(config, device)
 
     # build model architecture, then print to console
     model_gen = instantiate(config.model_gen).to(device)
-    # logger.info(model_gen)
     model_disc = instantiate(config.model_disc).to(device)
-    # logger.info(model_disc)
+
+    # Count and log number of parameters
+    n_params_gen = count_parameters(model_gen)
+    n_params_disc = count_parameters(model_disc)
+
+    logger.info(f"Generator training parameters: {n_params_gen:,}")
+    logger.info(f"Discriminator training parameters: {n_params_disc:,}")
+    logger.info(f"Total training parameters: {n_params_gen + n_params_disc:,}")
+
     # get function handles of loss and metrics
     loss_function_gen = instantiate(config.loss_function_gen).to(device)
     loss_function_disc = instantiate(config.loss_function_disc).to(device)
@@ -56,8 +71,6 @@ def main(config):
     optimizer_disc = instantiate(config.optimizer_disc, params=trainable_params_disc)
     lr_scheduler_disc = instantiate(config.lr_scheduler_disc, optimizer=optimizer_disc)
 
-    # epoch_len = number of iterations for iteration-based training
-    # epoch_len = None or len(dataloader) for epoch-based training
     epoch_len = config.trainer.get("epoch_len")
     disc_steps = config.trainer.get("disc_steps")
     gradient_accumulation_steps = config.trainer.get("gradient_accumulation_steps")
@@ -79,8 +92,8 @@ def main(config):
         logger=logger,
         writer=writer,
         batch_transforms=batch_transforms,
-        disc_steps = disc_steps,
-        gradient_accumulation_steps = gradient_accumulation_steps,
+        disc_steps=disc_steps,
+        gradient_accumulation_steps=gradient_accumulation_steps,
         skip_oom=config.trainer.get("skip_oom", True),
     )
 
