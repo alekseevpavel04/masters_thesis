@@ -18,7 +18,19 @@
 - **Sousou no Frieren** - Серии: 4, 7, 10, 14, 18, 22, 25, 27
 - **Tsue to Tsurugi no Wistoria** - Серии: 1, 4, 6, 9
 - **Vinland Saga S2** - Серии: 3, 7, 12, 16, 19, 21
-
+- Kimi ni Todoke S3 - Серии: 1,2,3,4,5
+- Pluto - Серии: 1,3,6,8
+- Karakai Jouzu no Takagi-san S3 - Серии: 1,3,4,7,10,12
+- Kage no Jitsuryokusha ni Naritakute! S2 - Серии: 1,3,5,8,10,12
+- Chi. Chikyuu no Undou ni Tsuite - Серии: 1,4,6,9,12,15
+- Kaijuu 8-gou - Серии: 2,6,9,12
+- Ore dake Level Up na Ken - Серии: 1,3,5,7,9,11
+- Kimetsu no Yaiba: Katanakaji no Sato-hen - Серии: 1,3,5,7,9,11
+- Ao Ashi - Серии: 1,5,9,12,15,18,20,22,24
+- Dr. Stone: New World S3 - Серии: 1,3,5,7,9,11
+- Horimiya: Piece - Серии: 1,3,5,7,9,11,12,13
+- Lycoris Recoil - Серии: 1,3,5,7,9,11,12,13
+Пока + 75 видео
 
 **Всего получилось 73 видео.**
 
