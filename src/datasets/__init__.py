@@ -1,1 +1,3 @@
-from src.datasets.dataset_train import CustomDataset_train
+from src.datasets.custom_dataset import CustomDataset_train
+from src.datasets.custom_dataset import CustomDataset_val
+from src.datasets.custom_dataset import CustomDataset_test

@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image
 from torchvision import transforms
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +17,20 @@ class BaseDataset(Dataset):
 
     Given a proper index (list[dict]), allows to process different datasets
     for the same task in the identical manner. Therefore, to work with
-    several datasets, the user only have to define index in a nested class.
+    several datasets, the user only has to define index in a nested class.
     """
 
     def __init__(
-        self, index, limit=None, shuffle_index=False, instance_transforms=None
+            self,
+            partition: str,
+            index=None,
+            limit=None,
+            shuffle_index=False,
+            instance_transforms=None
     ):
         """
         Args:
+            partition (str): Dataset partition ('train', 'val', or 'test')
             index (list[dict]): list, containing dict for each element of
                 the dataset. The dict has required metadata information,
                 such as label and object path.
@@ -35,11 +42,15 @@ class BaseDataset(Dataset):
                 should be applied on the instance. Depend on the
                 tensor name.
         """
-        self._assert_index_is_valid(index)
+        self.partition = partition
 
+        # If no index provided, create it
+        if index is None:
+            index = self._create_index()
+
+        self._assert_index_is_valid(index)
         index = self._shuffle_and_limit_index(index, limit, shuffle_index)
         self._index: List[dict] = index
-
         self.instance_transforms = instance_transforms
 
     def __getitem__(self, ind):
@@ -71,6 +82,14 @@ class BaseDataset(Dataset):
         Get length of the dataset (length of the index).
         """
         return len(self._index)
+
+    def get_index_path(self):
+        """Get the path for the index file based on partition"""
+        return Path(self.ROOT_PATH) / "data" / "custom" / f"index_{self.partition}.json"
+
+    def get_data_folder(self):
+        """Get the path for the data folder based on partition"""
+        return Path(self.ROOT_PATH) / "data" / "custom" / f"SR_dataset_{self.partition}"
 
     def load_object(self, path):
         """
@@ -124,7 +143,7 @@ class BaseDataset(Dataset):
 
     @staticmethod
     def _filter_records_from_dataset(
-        index: list,
+            index: list,
     ) -> list:
         """
         Filter some of the elements from the dataset depending on

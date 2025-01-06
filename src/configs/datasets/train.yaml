@@ -1,11 +1,12 @@
 train:
-  _target_: torch.utils.data.ConcatDataset # we can concat datasets if we want to
+  _target_: torch.utils.data.ConcatDataset
   datasets:
     - _target_: src.datasets.CustomDataset_train
       instance_transforms: ${transforms.instance_transforms.train}
+      limit: 100
 val:
-  _target_: torch.utils.data.ConcatDataset # we can concat datasets if we want to
+  _target_: torch.utils.data.ConcatDataset
   datasets:
-    - _target_: src.datasets.CustomDataset_train
+    - _target_: src.datasets.CustomDataset_val
       instance_transforms: ${transforms.instance_transforms.train}
       limit: 100

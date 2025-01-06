@@ -1,6 +1,6 @@
 inference:
-  _target_: torch.utils.data.ConcatDataset # we can concat datasets if we want to
+  _target_: torch.utils.data.ConcatDataset
   datasets:
-    - _target_: src.datasets.CustomDataset_train
+    - _target_: src.datasets.CustomDataset_test
       instance_transforms: ${transforms.instance_transforms.train}
-      limit: 1000
+      limit: 100
