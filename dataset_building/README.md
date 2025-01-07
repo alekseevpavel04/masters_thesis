@@ -18,22 +18,47 @@
 - **Sousou no Frieren** - Серии: 4, 7, 10, 14, 18, 22, 25, 27
 - **Tsue to Tsurugi no Wistoria** - Серии: 1, 4, 6, 9
 - **Vinland Saga S2** - Серии: 3, 7, 12, 16, 19, 21
+- Kimi ni Todoke S3 - Серии: 1,2,3,4,5
+- Pluto - Серии: 1,3,6,8
+- Karakai Jouzu no Takagi-san S3 - Серии: 1,3,4,7,10,12
+- Kage no Jitsuryokusha ni Naritakute! S2 - Серии: 1,3,5,8,10,12
+- Chi. Chikyuu no Undou ni Tsuite - Серии: 1,4,6,9,12,15
+- Kaijuu 8-gou - Серии: 2,6,9,12
+- Ore dake Level Up na Ken - Серии: 1,3,5,7,9,11
+- Kimetsu no Yaiba: Katanakaji no Sato-hen - Серии: 1,3,5,7,9,11
+- Ao Ashi - Серии: 1,5,9,12,15,18,20,22,24
+- Dr. Stone: New World S3 - Серии: 1,3,5,7,9,11
+- Horimiya: Piece - Серии: 1,3,5,7,9,11,12,13
+- Lycoris Recoil - Серии: 1,3,5,7,9,11,12,13
 
-
-**Всего получилось 73 видео.**
-
+**Всего получилось 146 видео.**
 
 #### Часть 1 (40 видео):
-- 48,255 наиболее похожих кадров
+- 48,255 наиболее непохожих кадров
 - 4.7% удалено с помощью `image_filter_ResNet`
 - 37.52% удалено с помощью `ImageDeduplicator`
 - Время обработки: 1.5 часа
 
 #### Часть 2 (33 видео):
-- 46,283 наиболее похожих кадров
+- 46,283 наиболее непохожих кадров
 - 4.07% удалено с помощью `image_filter_ResNet`
 - 44.37% удалено с помощью `ImageDeduplicator`
 - Время обработки: 2 часа
+
+Часть 3 (35 видео):
+- 46832 наиболее непохожих кадров
+- 2025-01-06 19:14:51,999 - ImageDeduplicator - INFO - Удалено 18569 дубликатов из 44675 изображений. Доля удаленных: 41.56%
+- 2025-01-06 18:14:38,168 - tools.image_filter_ResNet - INFO - Selected 2157 images for removal based on evaluation scores.
+- 2025-01-06 18:14:38,169 - tools.image_filter_ResNet - INFO - Fraction of images removed: 4.04%
+Время обработки: 2 часа 45 минут
+
+
+Часть 4 (38 видео):
+- 55349 наиболее непохожих кадров
+- 2025-01-06 22:14:31,932 - ImageDeduplicator - INFO - Удалено 16669 дубликатов из 45272 изображений. Доля удаленных: 36.82%
+2025-01-06 21:17:26,399 - tools.image_filter_ResNet - INFO - Selected 2872 images for removal based on evaluation scores.
+2025-01-06 21:17:26,400 - tools.image_filter_ResNet - INFO - Fraction of images removed: 5.19%
+Время обработки: 2 часа
 
 **Итог:**  
 59388 .png файлов, общий объём: 116 Гб
