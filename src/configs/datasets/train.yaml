@@ -1,9 +1,13 @@
 train:
   _target_: torch.utils.data.ConcatDataset
   datasets:
-    - _target_: src.datasets.CustomDataset_train
+    - _target_: src.datasets.CustomDataset_train_p1
       instance_transforms: ${transforms.instance_transforms.train}
       limit: 100
+    - _target_: src.datasets.CustomDataset_train_p2
+      instance_transforms: ${transforms.instance_transforms.train}
+      limit: 100
+
 val:
   _target_: torch.utils.data.ConcatDataset
   datasets:

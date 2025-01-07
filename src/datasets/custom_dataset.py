@@ -20,7 +20,7 @@ class CustomDataset(BaseDataset):
     def __init__(self, partition: str, *args, **kwargs):
         """
         Args:
-            partition (str): Dataset partition ('train', 'val', or 'test')
+            partition (str): Dataset partition ('train', 'val', or 'test', etc)
         """
         super().__init__(partition=partition, *args, **kwargs)
 
@@ -33,20 +33,13 @@ class CustomDataset(BaseDataset):
                 the dataset. The dict has required metadata information,
                 such as object path.
         """
-        index = []
         data_path = ROOT_PATH / "data" / "custom"
         data_path.mkdir(exist_ok=True, parents=True)
 
         # Dataset-specific configurations
-        # dataset_configs = {
-        #     'train': {'name': 'sr-dataset', 'folder': 'SR_dataset'},
-        #     'val': {'name': 'sr-dataset-val', 'folder': 'SR_dataset_val'},
-        #     'test': {'name': 'sr-dataset-test', 'folder': 'SR_dataset_test'}
-        # }
-
-        # To test we may use nano versions
         dataset_configs = {
-            'train': {'name': 'sr-dataset-nano', 'folder': 'SR_dataset_nano'},
+            'train_p1': {'name': 'sr-dataset-train-part1-nano', 'folder': 'SR_dataset_train_part1_nano'},
+            'train_p2': {'name': 'sr-dataset-train-part2-nano', 'folder': 'SR_dataset_train_part2_nano'},
             'val': {'name': 'sr-dataset-val-nano', 'folder': 'SR_dataset_val_nano'},
             'test': {'name': 'sr-dataset-test-nano', 'folder': 'SR_dataset_test_nano'}
         }
@@ -54,15 +47,22 @@ class CustomDataset(BaseDataset):
         config = dataset_configs[self.partition]
         zip_file = ROOT_PATH / "data" / f"{config['name']}.zip"
         folder_path = data_path / config['folder']
+        index_path = self.get_index_path()
 
-        # Download and extract if needed
-        if not zip_file.exists():
-            print(f"Dataset {self.partition} not found. Downloading from Kaggle...")
-            self._download_dataset(config['name'])
+        # First check if both folder and index exist
+        if folder_path.exists() and index_path.exists():
+            print(f"Dataset {self.partition} and index already exist. Loading index...")
+            return read_json(str(index_path))
 
+        # If either is missing, we need to process/reprocess the dataset
         if not folder_path.exists():
+            if not zip_file.exists():
+                print(f"Dataset {self.partition} not found. Downloading from Kaggle...")
+                self._download_dataset(config['name'])
             self._unzip_dataset(zip_file, data_path)
 
+        # Create index
+        index = []
         image_files = [f for f in folder_path.glob("*") if f.is_file()]
 
         print(f"Parsing {self.partition} dataset metadata...")
@@ -74,7 +74,6 @@ class CustomDataset(BaseDataset):
             index.append({"path": str(save_path)})
 
         # Write partition-specific index file
-        index_path = self.get_index_path()
         write_json(index, str(index_path))
 
         self._cleanup(zip_file)
@@ -133,11 +132,18 @@ class CustomDataset(BaseDataset):
         return torchvision.transforms.ToTensor()(Image.open(path))
 
 
-class CustomDataset_train(CustomDataset):
+class CustomDataset_train_p1(CustomDataset):
     """Custom dataset class for training data."""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(partition='train', *args, **kwargs)
+        super().__init__(partition='train_p1', *args, **kwargs)
+
+
+class CustomDataset_train_p2(CustomDataset):
+    """Custom dataset class for training data."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(partition='train_p2', *args, **kwargs)
 
 
 class CustomDataset_val(CustomDataset):
