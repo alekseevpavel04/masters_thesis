@@ -79,11 +79,11 @@
 - **Kimi wa Houkago Insomnia** - Серии: 5, 11
 - **Atarashii Joushi wa Do Tennen** - Серии: 5, 11
 
-# TODO
+
 **Результаты**
-- NNN наиболее непохожих кадров
-- NNN% удалено с помощью `image_filter_ResNet`
-- NNN% удалено с помощью `ImageDeduplicator`
+- 13641 наиболее непохожих кадров
+- 3.71% удалено с помощью `image_filter_ResNet`
+- 37.22% удалено с помощью `ImageDeduplicator`
 # TODO
 **Итог (val):**  
 NNN тысяч .png файлов, общим объёмом NNN Гб.
