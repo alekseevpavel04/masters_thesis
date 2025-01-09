@@ -73,20 +73,20 @@
 
 
 ## Список использованных аниме для создания датасета (test)
-- **One Piece Fan Letter** - Серии: 1
-- **Dandadan** - Серии: 6, 12
 - **Spy x Family** - Серии: 5, 11
 - **Bocchi the Rock** - Серии: 5, 11
-- **Tengoku Daimakyou** - Серии: 5, 13
-- **Lycoris Recoil** - Серии: 7
+- **Mob Psycho 100 S3** - Серии: 5, 11
+- **Kimi wa Houkago Insomnia** - Серии: 5, 11
+- **Atarashii Joushi wa Do Tennen** - Серии: 5, 11
 
+# TODO
 **Результаты**
-- 14,706 наиболее непохожих кадров
-- 3.16% удалено с помощью `image_filter_ResNet`
-- 33.70% удалено с помощью `ImageDeduplicator`
-
+- NNN наиболее непохожих кадров
+- NNN% удалено с помощью `image_filter_ResNet`
+- NNN% удалено с помощью `ImageDeduplicator`
+# TODO
 **Итог (val):**  
-11.3 тысяч .png файлов, общим объёмом 37.42 Гб.
+NNN тысяч .png файлов, общим объёмом NNN Гб.
 
 
 ---
