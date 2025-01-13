@@ -13,8 +13,7 @@ from contextlib import contextmanager
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
-from collections import OrderedDict
-import hashlib
+from utils import FrameCache
 
 sys.path.append('../..')
 from src.model import RRDBNet
@@ -30,65 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-class FrameCache:
-    def __init__(self, max_size=100):
-        """
-        Инициализация кэша кадров
-
-        Args:
-            max_size (int): Максимальный размер кэша
-        """
-        self.max_size = max_size
-        self.cache = OrderedDict()
-
-    def _calculate_frame_hash(self, frame):
-        """
-        Вычисление хэша кадра
-
-        Args:
-            frame (numpy.ndarray): Входной кадр
-
-        Returns:
-            str: Хэш кадра
-        """
-        # Уменьшаем размер кадра для более быстрого хэширования
-        downscaled = cv2.resize(frame, (32, 32))
-        # Используем только каждый второй пиксель для еще большего ускорения
-        return hashlib.md5(downscaled[::2, ::2].tobytes()).hexdigest()
-
-    def get(self, frame):
-        """
-        Получение кадра из кэша
-
-        Args:
-            frame (numpy.ndarray): Входной кадр
-
-        Returns:
-            numpy.ndarray or None: Улучшенный кадр если найден в кэше, иначе None
-        """
-        frame_hash = self._calculate_frame_hash(frame)
-        if frame_hash in self.cache:
-            # Перемещаем элемент в конец (помечаем как недавно использованный)
-            self.cache.move_to_end(frame_hash)
-            return self.cache[frame_hash]
-        return None
-
-    def put(self, frame, enhanced_frame):
-        """
-        Добавление кадра в кэш
-
-        Args:
-            frame (numpy.ndarray): Исходный кадр
-            enhanced_frame (numpy.ndarray): Улучшенный кадр
-        """
-        frame_hash = self._calculate_frame_hash(frame)
-
-        # Если кэш переполнен, удаляем самый старый элемент
-        if len(self.cache) >= self.max_size:
-            self.cache.popitem(last=False)
-
-        self.cache[frame_hash] = enhanced_frame
 
 
 class VideoUpscaler:
@@ -150,7 +90,7 @@ class VideoUpscaler:
 
     def enhance_frame(self, img):
         """
-        Улучшение одного кадра
+        Улучшение одного кадра по блокам 64x64 с наложением 8 пикселей
 
         Args:
             img (numpy.ndarray): Входное изображение
@@ -167,28 +107,57 @@ class VideoUpscaler:
                 self.cache_hits += 1
                 return cached_frame
 
-            # Если кадра нет в кэше, обрабатываем его
-            # Предобработка
-            img = img.astype(np.float32) / 255.
-            img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
-            img = img.to(self.device)
+            # Если кадра нет в кэше, обрабатываем его по блокам
+            h, w, c = img.shape
+            block_size = 64
+            overlap = 8
+            stride = block_size - overlap
 
-            # Инференс
-            with torch.no_grad():
-                output = self.model(img)
+            # Создаем пустое изображение для результата
+            enhanced_img = np.zeros((h * 2, w * 2, c), dtype=np.uint8)
 
-            # Постобработка
-            output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            output = (output * 255.0).clip(0, 255).astype(np.uint8)
+            # Обрабатываем каждый блок
+            for y in range(0, h, stride):
+                for x in range(0, w, stride):
+                    # Определяем границы блока с учетом наложения
+                    y_start = max(y - overlap, 0)
+                    x_start = max(x - overlap, 0)
+                    y_end = min(y_start + block_size, h)
+                    x_end = min(x_start + block_size, w)
+
+                    # Вырезаем блок
+                    block = img[y_start:y_end, x_start:x_end]
+
+                    # Предобработка
+                    block = block.astype(np.float32) / 255.
+                    block = torch.from_numpy(block).permute(2, 0, 1).unsqueeze(0)
+                    block = block.to(self.device)
+
+                    # Инференс
+                    with torch.no_grad():
+                        output = self.model(block)
+
+                    # Постобработка
+                    output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                    output = (output * 255.0).clip(0, 255).astype(np.uint8)
+
+                    # Определяем границы для вставки результата
+                    out_y_start = y_start * 2
+                    out_x_start = x_start * 2
+                    out_y_end = out_y_start + output.shape[0]
+                    out_x_end = out_x_start + output.shape[1]
+
+                    # Вставляем результат в итоговое изображение
+                    enhanced_img[out_y_start:out_y_end, out_x_start:out_x_end] = output
 
             # Сохраняем в кэш
-            self.frame_cache.put(img, output)
+            self.frame_cache.put(img, enhanced_img)
 
             # Очистка CUDA кэша
             if self.device.type == 'cuda':
                 torch.cuda.empty_cache()
 
-            return output
+            return enhanced_img
 
         except Exception as e:
             logger.error(f"Error in enhance_frame: {str(e)}")
