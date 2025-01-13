@@ -43,3 +43,6 @@ venv_win/
 # Логи
 /dataset_building/dataset_preparation/logs/*.log
 
+/video_processing/inference_video/model/RealESRGAN_final.pth
+/video_processing/inference_video/input/*.mkv
+/video_processing/inference_video/output/*.mkv

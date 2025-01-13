@@ -1,0 +1,1 @@
+# Use download_assets.sh to get model

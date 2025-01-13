@@ -20,7 +20,6 @@ fi
 
 # Print the actual directory where files will be saved
 echo "Target directory for downloads: $TARGET_DIR"
-
 echo "Downloading weights..."
 
 # Function to download files and check for errors
