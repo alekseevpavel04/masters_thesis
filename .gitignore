@@ -48,3 +48,4 @@ venv_win/
 /video_processing/inference_video/output/*.mkv
 /cuda-keyring_1.1-1_all.deb
 /torch2trt/
+/video_processing/inference_video/upscaler.log

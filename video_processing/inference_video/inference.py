@@ -3,208 +3,379 @@ import cv2
 import torch
 import numpy as np
 from time import time
+import logging
+from datetime import datetime
 from moviepy.editor import VideoFileClip, AudioFileClip
 from moviepy.video.io.ffmpeg_writer import FFMPEG_VideoWriter
 from tqdm import tqdm
 import sys
+from contextlib import contextmanager
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
 
 sys.path.append('../..')
 from src.model import RRDBNet
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('upscaler.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 
 class VideoUpscaler:
-    def __init__(self, model_path='model/RealESRGAN_final.pth'):
-        # Initialize model
+    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1, num_workers=4):
+        """
+        Инициализация апскейлера
+
+        Args:
+            model_path (str): Путь к модели
+            batch_size (int): Размер батча для обработки кадров
+            num_workers (int): Количество рабочих потоков
+        """
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+        # Инициализация устройства
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
-        self.model = RRDBNet(in_nc=3, out_nc=3, nf=64, nb=23, gc=32, scale=2)
+        logger.info(f"Using device: {self.device}")
 
-        # Load model weights
-        loadnet = torch.load(model_path, map_location=self.device)
-        if 'params_ema' in loadnet:
-            self.model.load_state_dict(loadnet['params_ema'])
-        else:
-            self.model.load_state_dict(loadnet)
+        # Загрузка модели
+        try:
+            self.model = RRDBNet(in_nc=3, out_nc=3, nf=64, nb=23, gc=32, scale=2)
+            loadnet = torch.load(model_path, map_location=self.device, weights_only=True)
 
-        self.model.eval()
-        self.model = self.model.to(self.device)
+            if 'params_ema' in loadnet:
+                self.model.load_state_dict(loadnet['params_ema'])
+            else:
+                self.model.load_state_dict(loadnet)
+
+            self.model.eval()
+            self.model = self.model.to(self.device)
+            logger.info("Model loaded successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to load model: {str(e)}")
+            raise
+
+    @contextmanager
+    def video_context(self, path):
+        """Контекстный менеджер для безопасной работы с видео"""
+        video = None
+        try:
+            video = VideoFileClip(path)
+            yield video
+        finally:
+            if video is not None:
+                video.close()
 
     def enhance_frame(self, img):
-        # Convert to tensor and preprocess
-        img = img.astype(np.float32) / 255.
-        img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
-        img = img.to(self.device)
+        """
+        Улучшение одного кадра
 
-        # Inference
-        with torch.no_grad():
-            output = self.model(img)
+        Args:
+            img (numpy.ndarray): Входное изображение
 
-        # Postprocess
-        output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-        output = (output * 255.0).clip(0, 255).astype(np.uint8)
-        return output
-
-    def process_video(self, input_path, output_path):
-        # Extract audio first
-        print("Extracting audio...")
-        temp_audio_path = output_path + '.temp.aac'
-        has_audio = False
-
+        Returns:
+            numpy.ndarray: Улучшенное изображение
+        """
         try:
-            video = VideoFileClip(input_path)
+            # Предобработка
+            img = img.astype(np.float32) / 255.
+            img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
+            img = img.to(self.device)
+
+            # Инференс
+            with torch.no_grad():
+                output = self.model(img)
+
+            # Постобработка
+            output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            output = (output * 255.0).clip(0, 255).astype(np.uint8)
+
+            # Очистка CUDA кэша
+            if self.device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+            return output
+
+        except Exception as e:
+            logger.error(f"Error in enhance_frame: {str(e)}")
+            raise
+
+    def enhance_batch(self, frames):
+        """
+        Улучшение батча кадров
+
+        Args:
+            frames (list): Список кадров
+
+        Returns:
+            list: Список улучшенных кадров
+        """
+        try:
+            # Подготовка батча
+            batch = np.array(frames).astype(np.float32) / 255.
+            batch = torch.from_numpy(batch).permute(0, 3, 1, 2)
+            batch = batch.to(self.device)
+
+            # Инференс
+            with torch.no_grad():
+                output = self.model(batch)
+
+            # Постобработка
+            output = output.permute(0, 2, 3, 1).cpu().numpy()
+            output = (output * 255.0).clip(0, 255).astype(np.uint8)
+
+            if self.device.type == 'cuda':
+                torch.cuda.empty_cache()
+
+            return list(output)
+
+        except Exception as e:
+            logger.error(f"Error in enhance_batch: {str(e)}")
+            raise
+
+    def extract_audio(self, video, temp_audio_path):
+        """
+        Извлечение аудио из видео
+
+        Args:
+            video (VideoFileClip): Видео файл
+            temp_audio_path (str): Путь для сохранения аудио
+
+        Returns:
+            bool: Успешность извлечения
+        """
+        try:
             if video.audio is not None:
                 video.audio.write_audiofile(
                     temp_audio_path,
-                    codec='aac',  # Explicitly specify codec
-                    ffmpeg_params=['-strict', '-2'],  # Allow experimental codecs
+                    codec='aac',
+                    ffmpeg_params=['-strict', '-2'],
                     verbose=False,
                     logger=None
                 )
-                has_audio = True
-            video.close()
+                logger.info("Audio extracted successfully")
+                return True
         except Exception as e:
-            print(f"Warning: Could not extract audio: {str(e)}")
+            logger.warning(f"Could not extract audio: {str(e)}")
             if os.path.exists(temp_audio_path):
                 os.remove(temp_audio_path)
-            has_audio = False
+        return False
 
-        # Process video
-        print("Processing video...")
-        video = VideoFileClip(input_path)
-        fps = video.fps
-        total_frames = int(video.duration * fps)
+    def merge_audio(self, video_path, audio_path, output_path):
+        """
+        Объединение видео и аудио
 
-        print(f"\nVideo Info:")
-        print(f"Resolution: {video.size[0]}x{video.size[1]}")
-        print(f"FPS: {fps}")
-        print(f"Duration: {video.duration:.2f} seconds")
-        print(f"Total frames: {total_frames}")
-        print(f"Output resolution: {video.size[0] * 2}x{video.size[1] * 2}\n")
+        Args:
+            video_path (str): Путь к видео
+            audio_path (str): Путь к аудио
+            output_path (str): Путь для сохранения результата
+        """
+        logger.info("Merging video with audio...")
+        try:
+            cmd = [
+                'ffmpeg', '-y',
+                '-i', video_path,
+                '-i', audio_path,
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                '-strict', '-2',
+                output_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            logger.info("Audio merged successfully")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to merge audio: {e.stderr.decode()}")
+            os.rename(video_path, output_path)
 
-        # Create temporary path for video without audio
-        temp_output_path = output_path + '.temp.mp4'
+    def save_progress(self, output_path, processed_frames, total_frames):
+        """Сохранение прогресса обработки"""
+        progress = {
+            'processed_frames': processed_frames,
+            'total_frames': total_frames,
+            'timestamp': datetime.now().isoformat()
+        }
+        with open(f"{output_path}.progress", 'w') as f:
+            json.dump(progress, f)
 
-        # Initialize writer
-        width, height = video.size
-        writer = FFMPEG_VideoWriter(
-            temp_output_path,
-            (width * 2, height * 2),  # 2x upscale
-            fps,
-            ffmpeg_params=['-vcodec', 'libx264', '-crf', '17']
-        )
+    def load_progress(self, output_path):
+        """Загрузка прогресса обработки"""
+        try:
+            with open(f"{output_path}.progress", 'r') as f:
+                progress = json.load(f)
+            return progress['processed_frames']
+        except:
+            return 0
 
-        # Initialize progress bar
-        pbar = tqdm(total=total_frames,
-                    desc="Processing frames",
-                    unit="frames",
-                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
+    def process_video(self, input_path, output_path, resume=False):
+        """
+        Обработка видео
 
-        processed_frames = 0
-        start_time = time()
-        fps_buffer = []
+        Args:
+            input_path (str): Путь к входному видео
+            output_path (str): Путь для сохранения результата
+            resume (bool): Продолжить обработку с последнего сохраненного состояния
+        """
+        temp_audio_path = f"{output_path}.temp.aac"
+        temp_output_path = f"{output_path}.temp.mp4"
+        has_audio = False
 
         try:
-            # Process frames
-            for frame in video.iter_frames():
-                frame_start_time = time()
+            with self.video_context(input_path) as video:
+                # Извлечение аудио
+                logger.info("Extracting audio...")
+                has_audio = self.extract_audio(video, temp_audio_path)
 
-                # Process frame
-                enhanced_frame = self.enhance_frame(frame)
-                writer.write_frame(enhanced_frame)
+                # Подготовка к обработке видео
+                logger.info("Processing video...")
+                fps = video.fps
+                total_frames = int(video.duration * fps)
+                width, height = video.size
 
-                # Update progress
-                processed_frames += 1
-                frame_time = time() - frame_start_time
-                fps_buffer.append(1 / frame_time if frame_time > 0 else 0)
+                # Вывод информации о видео
+                logger.info(f"\nVideo Info:")
+                logger.info(f"Resolution: {width}x{height}")
+                logger.info(f"FPS: {fps}")
+                logger.info(f"Duration: {video.duration:.2f} seconds")
+                logger.info(f"Total frames: {total_frames}")
+                logger.info(f"Output resolution: {width * 2}x{height * 2}\n")
 
-                # Keep only last 30 frames for FPS calculation
-                if len(fps_buffer) > 30:
-                    fps_buffer.pop(0)
+                # Загрузка прогресса если нужно
+                start_frame = self.load_progress(output_path) if resume else 0
+                if start_frame > 0:
+                    logger.info(f"Resuming from frame {start_frame}")
 
-                current_fps = sum(fps_buffer) / len(fps_buffer)
+                with FFMPEG_VideoWriter(
+                        temp_output_path,
+                        (width * 2, height * 2),
+                        fps,
+                        ffmpeg_params=['-vcodec', 'libx264', '-crf', '17']
+                ) as writer:
 
-                # Update progress bar with FPS
-                pbar.set_postfix({
-                    'FPS': f"{current_fps:.1f}",
-                    'Elapsed': f"{(time() - start_time):.1f}s"
-                })
-                pbar.update(1)
+                    pbar = tqdm(total=total_frames,
+                                initial=start_frame,
+                                desc="Processing frames",
+                                unit="frames")
 
-        except Exception as e:
-            print(f"\nError during processing: {str(e)}")
-            raise e
+                    try:
+                        processed_frames = start_frame
+                        start_time = time()
+                        fps_buffer = []
+                        current_batch = []
+
+                        # Обработка кадров
+                        for i, frame in enumerate(video.iter_frames()):
+                            if i < start_frame:
+                                continue
+
+                            frame_start_time = time()
+
+                            # Батчинг
+                            current_batch.append(frame)
+                            if len(current_batch) == self.batch_size:
+                                enhanced_frames = self.enhance_batch(current_batch)
+                                for enhanced_frame in enhanced_frames:
+                                    writer.write_frame(enhanced_frame)
+                                    processed_frames += 1
+                                current_batch = []
+
+                                # Обновление прогресса
+                                frame_time = (time() - frame_start_time) / self.batch_size
+                                fps_buffer.append(1 / frame_time if frame_time > 0 else 0)
+                                if len(fps_buffer) > 30:
+                                    fps_buffer.pop(0)
+
+                                current_fps = sum(fps_buffer) / len(fps_buffer)
+                                pbar.set_postfix({
+                                    'FPS': f"{current_fps:.1f}",
+                                    'Elapsed': f"{(time() - start_time):.1f}s"
+                                })
+                                pbar.update(self.batch_size)
+
+                                # Сохранение прогресса каждые 100 кадров
+                                if processed_frames % 100 == 0:
+                                    self.save_progress(output_path, processed_frames, total_frames)
+
+                        # Обработка оставшихся кадров
+                        if current_batch:
+                            enhanced_frames = self.enhance_batch(current_batch)
+                            for enhanced_frame in enhanced_frames:
+                                writer.write_frame(enhanced_frame)
+                                processed_frames += 1
+                            pbar.update(len(current_batch))
+
+                    finally:
+                        pbar.close()
+
+            # Объединение с аудио если есть
+            if has_audio:
+                self.merge_audio(temp_output_path, temp_audio_path, output_path)
+            else:
+                os.rename(temp_output_path, output_path)
+
+            # Очистка файла прогресса
+            if os.path.exists(f"{output_path}.progress"):
+                os.remove(f"{output_path}.progress")
+
+            end_time = time()
+            logger.info(f"\nVideo processing completed in {end_time - start_time:.2f} seconds")
+            logger.info(f"Average FPS: {processed_frames / (end_time - start_time):.2f}")
 
         finally:
-            pbar.close()
-            writer.close()
-            video.close()
-
-        # Combine video with audio if available
-        if has_audio:
-            print("\nMerging video with audio...")
-            import subprocess
-
-            try:
-                cmd = [
-                    'ffmpeg', '-y',
-                    '-i', temp_output_path,
-                    '-i', temp_audio_path,
-                    '-c:v', 'copy',
-                    '-c:a', 'aac',
-                    '-strict', '-2',  # Allow experimental codecs
-                    output_path
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
-                print("Audio merged successfully")
-            except subprocess.CalledProcessError as e:
-                print(f"Warning: Failed to merge audio: {e.stderr.decode()}")
-                # If audio merging fails, just use the video without audio
-                os.rename(temp_output_path, output_path)
-        else:
-            # If no audio in original, just rename the temp file
-            os.rename(temp_output_path, output_path)
-
-        # Cleanup temporary files
-        if os.path.exists(temp_output_path):
-            os.remove(temp_output_path)
-        if os.path.exists(temp_audio_path):
-            os.remove(temp_audio_path)
-
-        end_time = time()
-        print(f"\nVideo processing completed in {end_time - start_time:.2f} seconds")
-        print(f"Average FPS: {processed_frames / (end_time - start_time):.2f}")
+            # Очистка временных файлов
+            for temp_file in [temp_output_path, temp_audio_path]:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
 
 
 def main():
-    model_path = 'model/RealESRGAN_final.pth'
-    print(f"Model path: {os.path.abspath(model_path)}")
+    """Основная функция"""
+    try:
+        model_path = 'model/RealESRGAN_final.pth'
+        logger.info(f"Model path: {os.path.abspath(model_path)}")
 
-    # Check directories exist
-    if not os.path.exists('model/RealESRGAN_final.pth'):
-        raise FileNotFoundError("Model file not found at /model/RealESRGAN_final.pth")
+        # Проверка наличия необходимых файлов и директорий
+        if not os.path.exists(model_path):
+            raise FileNotFoundError("Model file not found at /model/RealESRGAN_final.pth")
 
-    if not os.path.exists('input'):
-        raise FileNotFoundError("Input directory not found at /input")
+        if not os.path.exists('input'):
+            raise FileNotFoundError("Input directory not found at /input")
 
-    if not os.path.exists('output'):
-        os.makedirs('output')
+        if not os.path.exists('output'):
+            os.makedirs('output')
 
-    # Find all mkv files in input directory
-    input_files = [f for f in os.listdir('input') if f.endswith('.mkv')]
+        # Поиск видео файлов
+        input_files = [f for f in os.listdir('input') if f.endswith(('.mkv', '.mp4', '.avi'))]
 
-    if not input_files:
-        raise FileNotFoundError("No .mkv files found in /input directory")
+        if not input_files:
+            raise FileNotFoundError("No video files found in /input directory")
 
-    # Initialize upscaler
-    upscaler = VideoUpscaler()
+        # Инициализация апскейлера
+        upscaler = VideoUpscaler(
+            model_path=model_path,
+            batch_size=1,
+            num_workers=12
+        )
 
-    # Process each video
-    for i, input_file in enumerate(input_files, 1):
-        input_path = os.path.join('input', input_file)
-        output_path = os.path.join('output', f'upscaled_{input_file}')
+        # Обработка каждого видео
+        for i, input_file in enumerate(input_files, 1):
+            input_path = os.path.join('input', input_file)
+            output_path = os.path.join('output', f'upscaled_{input_file}')
 
-        print(f"\nProcessing video {i}/{len(input_files)}: {input_file}")
-        upscaler.process_video(input_path, output_path)
+            logger.info(f"\nProcessing video {i}/{len(input_files)}: {input_file}")
+            upscaler.process_video(input_path, output_path)
+
+    except Exception as e:
+        logger.error(f"Error in main: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
