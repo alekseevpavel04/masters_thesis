@@ -2,25 +2,6 @@
 
 ## 1. Install CUDA
 
-Follow these steps to install CUDA:
-
-1. Download the CUDA keyring:
-   ```bash
-   wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
-   ```
-2. Install the CUDA keyring:
-   ```bash
-   sudo dpkg -i cuda-keyring_1.1-1_all.deb
-   ```
-3. Update the package list:
-   ```bash
-   sudo apt-get update
-   ```
-4. Install CUDA:
-   ```bash
-   sudo apt-get -y install cuda
-   ```
-
 ## 2. Install cuDNN
 
 1. Install cuDNN:
