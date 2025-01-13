@@ -54,7 +54,7 @@ download_file() {
 
 # File URLs to download
 FILE_final_URL="https://drive.google.com/uc?id=1IA-oHhhxEil2luFEsoFxsSH6jXMQwyeH"
-VIDEO_EXAMPLE_URL="https://drive.google.com/uc?id=1bPbxJvrbETkf0P53JFDuRQ11YtM4HXwD"
+VIDEO_EXAMPLE_URL="https://drive.google.com/uc?id=1GVxKhFcdibhjRrcMg4P2O745wqSfiz2q"
 
 # Download files
 download_file "$FILE_final_URL" "$TARGET_DIR_final/RealESRGAN_final.pth"
