@@ -7,7 +7,12 @@ train:
     - _target_: src.datasets.CustomDataset_train_p2
       instance_transforms: ${transforms.instance_transforms.train}
       limit: 100
-
+    - _target_: src.datasets.CustomDataset_val
+      instance_transforms: ${transforms.instance_transforms.train}
+      limit: 100
+    - _target_: src.datasets.CustomDataset_test
+      instance_transforms: ${transforms.instance_transforms.train}
+      limit: 100
 val:
   _target_: torch.utils.data.ConcatDataset
   datasets:

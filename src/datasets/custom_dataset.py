@@ -38,10 +38,10 @@ class CustomDataset(BaseDataset):
 
         # Dataset-specific configurations
         dataset_configs = {
-            'train_p1': {'name': 'sr-dataset-train-part1-nano', 'folder': 'SR_dataset_train_part1_nano'},
-            'train_p2': {'name': 'sr-dataset-train-part2-nano', 'folder': 'SR_dataset_train_part2_nano'},
-            'val': {'name': 'sr-dataset-val-nano', 'folder': 'SR_dataset_val_nano'},
-            'test': {'name': 'sr-dataset-test-nano', 'folder': 'SR_dataset_test_nano'}
+            'train_p1': {'name': 'sr-dataset-train-part1', 'folder': 'SR_dataset_train_part1'},
+            'train_p2': {'name': 'sr-dataset-train-part2', 'folder': 'SR_dataset_train_part2'},
+            'val': {'name': 'sr-dataset-val', 'folder': 'SR_dataset_val'},
+            'test': {'name': 'sr-dataset-test', 'folder': 'SR_dataset_test'}
         }
 
         config = dataset_configs[self.partition]
