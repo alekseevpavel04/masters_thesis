@@ -13,6 +13,8 @@ from contextlib import contextmanager
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+from collections import OrderedDict
+import hashlib
 
 sys.path.append('../..')
 from src.model import RRDBNet
@@ -29,8 +31,68 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class FrameCache:
+    def __init__(self, max_size=100):
+        """
+        Инициализация кэша кадров
+
+        Args:
+            max_size (int): Максимальный размер кэша
+        """
+        self.max_size = max_size
+        self.cache = OrderedDict()
+
+    def _calculate_frame_hash(self, frame):
+        """
+        Вычисление хэша кадра
+
+        Args:
+            frame (numpy.ndarray): Входной кадр
+
+        Returns:
+            str: Хэш кадра
+        """
+        # Уменьшаем размер кадра для более быстрого хэширования
+        downscaled = cv2.resize(frame, (32, 32))
+        # Используем только каждый второй пиксель для еще большего ускорения
+        return hashlib.md5(downscaled[::2, ::2].tobytes()).hexdigest()
+
+    def get(self, frame):
+        """
+        Получение кадра из кэша
+
+        Args:
+            frame (numpy.ndarray): Входной кадр
+
+        Returns:
+            numpy.ndarray or None: Улучшенный кадр если найден в кэше, иначе None
+        """
+        frame_hash = self._calculate_frame_hash(frame)
+        if frame_hash in self.cache:
+            # Перемещаем элемент в конец (помечаем как недавно использованный)
+            self.cache.move_to_end(frame_hash)
+            return self.cache[frame_hash]
+        return None
+
+    def put(self, frame, enhanced_frame):
+        """
+        Добавление кадра в кэш
+
+        Args:
+            frame (numpy.ndarray): Исходный кадр
+            enhanced_frame (numpy.ndarray): Улучшенный кадр
+        """
+        frame_hash = self._calculate_frame_hash(frame)
+
+        # Если кэш переполнен, удаляем самый старый элемент
+        if len(self.cache) >= self.max_size:
+            self.cache.popitem(last=False)
+
+        self.cache[frame_hash] = enhanced_frame
+
+
 class VideoUpscaler:
-    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1, num_workers=4):
+    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1, num_workers=4, cache_size=100):
         """
         Инициализация апскейлера
 
@@ -38,9 +100,15 @@ class VideoUpscaler:
             model_path (str): Путь к модели
             batch_size (int): Размер батча для обработки кадров
             num_workers (int): Количество рабочих потоков
+            cache_size (int): Размер кэша кадров
         """
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.frame_cache = FrameCache(max_size=cache_size)
+
+        # Статистика кэша
+        self.cache_hits = 0
+        self.total_frames = 0
 
         # Инициализация устройства
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -66,7 +134,12 @@ class VideoUpscaler:
 
     @contextmanager
     def video_context(self, path):
-        """Контекстный менеджер для безопасной работы с видео"""
+        """
+        Контекстный менеджер для безопасной работы с видео
+
+        Args:
+            path (str): Путь к видеофайлу
+        """
         video = None
         try:
             video = VideoFileClip(path)
@@ -86,6 +159,15 @@ class VideoUpscaler:
             numpy.ndarray: Улучшенное изображение
         """
         try:
+            self.total_frames += 1
+
+            # Проверяем кэш
+            cached_frame = self.frame_cache.get(img)
+            if cached_frame is not None:
+                self.cache_hits += 1
+                return cached_frame
+
+            # Если кадра нет в кэше, обрабатываем его
             # Предобработка
             img = img.astype(np.float32) / 255.
             img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
@@ -98,6 +180,9 @@ class VideoUpscaler:
             # Постобработка
             output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
             output = (output * 255.0).clip(0, 255).astype(np.uint8)
+
+            # Сохраняем в кэш
+            self.frame_cache.put(img, output)
 
             # Очистка CUDA кэша
             if self.device.type == 'cuda':
@@ -120,23 +205,45 @@ class VideoUpscaler:
             list: Список улучшенных кадров
         """
         try:
-            # Подготовка батча
-            batch = np.array(frames).astype(np.float32) / 255.
-            batch = torch.from_numpy(batch).permute(0, 3, 1, 2)
-            batch = batch.to(self.device)
+            enhanced_frames = []
+            uncached_frames = []
+            uncached_indices = []
 
-            # Инференс
-            with torch.no_grad():
-                output = self.model(batch)
+            # Проверяем кэш для каждого кадра
+            for i, frame in enumerate(frames):
+                self.total_frames += 1
+                cached_frame = self.frame_cache.get(frame)
+                if cached_frame is not None:
+                    self.cache_hits += 1
+                    enhanced_frames.append(cached_frame)
+                else:
+                    uncached_frames.append(frame)
+                    uncached_indices.append(i)
 
-            # Постобработка
-            output = output.permute(0, 2, 3, 1).cpu().numpy()
-            output = (output * 255.0).clip(0, 255).astype(np.uint8)
+            # Если есть кадры, которых нет в кэше, обрабатываем их
+            if uncached_frames:
+                # Подготовка батча
+                batch = np.array(uncached_frames).astype(np.float32) / 255.
+                batch = torch.from_numpy(batch).permute(0, 3, 1, 2)
+                batch = batch.to(self.device)
 
-            if self.device.type == 'cuda':
-                torch.cuda.empty_cache()
+                # Инференс
+                with torch.no_grad():
+                    output = self.model(batch)
 
-            return list(output)
+                # Постобработка
+                output = output.permute(0, 2, 3, 1).cpu().numpy()
+                output = (output * 255.0).clip(0, 255).astype(np.uint8)
+
+                # Добавляем обработанные кадры в кэш и результат
+                for i, frame in enumerate(uncached_frames):
+                    self.frame_cache.put(frame, output[i])
+                    enhanced_frames.insert(uncached_indices[i], output[i])
+
+                if self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
+
+            return enhanced_frames
 
         except Exception as e:
             logger.error(f"Error in enhance_batch: {str(e)}")
@@ -197,7 +304,14 @@ class VideoUpscaler:
             os.rename(video_path, output_path)
 
     def save_progress(self, output_path, processed_frames, total_frames):
-        """Сохранение прогресса обработки"""
+        """
+        Сохранение прогресса обработки
+
+        Args:
+            output_path (str): Путь к выходному файлу
+            processed_frames (int): Количество обработанных кадров
+            total_frames (int): Общее количество кадров
+        """
         progress = {
             'processed_frames': processed_frames,
             'total_frames': total_frames,
@@ -207,7 +321,15 @@ class VideoUpscaler:
             json.dump(progress, f)
 
     def load_progress(self, output_path):
-        """Загрузка прогресса обработки"""
+        """
+        Загрузка прогресса обработки
+
+        Args:
+            output_path (str): Путь к выходному файлу
+
+        Returns:
+            int: Количество обработанных кадров
+        """
         try:
             with open(f"{output_path}.progress", 'r') as f:
                 progress = json.load(f)
@@ -296,7 +418,8 @@ class VideoUpscaler:
                                 current_fps = sum(fps_buffer) / len(fps_buffer)
                                 pbar.set_postfix({
                                     'FPS': f"{current_fps:.1f}",
-                                    'Elapsed': f"{(time() - start_time):.1f}s"
+                                    'Elapsed': f"{(time() - start_time):.1f}s",
+                                    'Cache hits': f"{(self.cache_hits / self.total_frames * 100):.1f}%"
                                 })
                                 pbar.update(self.batch_size)
 
@@ -329,7 +452,19 @@ class VideoUpscaler:
             logger.info(f"\nVideo processing completed in {end_time - start_time:.2f} seconds")
             logger.info(f"Average FPS: {processed_frames / (end_time - start_time):.2f}")
 
+            # Вывод статистики кэша
+            if self.total_frames > 0:
+                cache_hit_rate = (self.cache_hits / self.total_frames) * 100
+                logger.info(f"\nCache statistics:")
+                logger.info(f"Total frames processed: {self.total_frames}")
+                logger.info(f"Cache hits: {self.cache_hits}")
+                logger.info(f"Cache hit rate: {cache_hit_rate:.2f}%")
+
         finally:
+            # Сбрасываем статистику кэша
+            self.cache_hits = 0
+            self.total_frames = 0
+
             # Очистка временных файлов
             for temp_file in [temp_output_path, temp_audio_path]:
                 if os.path.exists(temp_file):
@@ -362,7 +497,8 @@ def main():
         upscaler = VideoUpscaler(
             model_path=model_path,
             batch_size=1,
-            num_workers=12
+            num_workers=12,
+            cache_size=100
         )
 
         # Обработка каждого видео
