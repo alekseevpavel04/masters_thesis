@@ -50,4 +50,4 @@ Follow these steps to install torch2trt:
 4. Alternatively, follow the installation guide here: [TensorRT Torch2TRT Installation Guide](https://github.com/vujadeyoon/TensorRT-Torch2TRT)
 
    
-- Speed without TensorRT and Torch2TRT is 1.2 FPS for 960x720 input
+- Basic speed is 1.16 FPS on average for 960x720 input
