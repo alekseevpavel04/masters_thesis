@@ -51,3 +51,4 @@ Follow these steps to install torch2trt:
 
    
 - Basic speed is 1.16 FPS on average for 960x720 input
+- With cuDNN is 1.96 FPS
