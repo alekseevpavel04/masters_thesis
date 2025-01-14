@@ -87,11 +87,20 @@ class VideoUpscaler:
         return enhanced_frames
 
     def process_video(self, input_path, output_path, resume=False):
-        temp_audio_path = f"{output_path}.temp.aac"
-        temp_output_path = f"{output_path}.temp.mp4"
+        # Create a backup of input file and temporary files
+        input_base = os.path.splitext(input_path)[0]
+        input_ext = os.path.splitext(input_path)[1]
+        input_backup = f"{input_base}_original{input_ext}"
+        temp_video_path = f"{input_base}_temp{input_ext}"
+        temp_audio_path = f"{input_base}_temp.aac"
 
         try:
-            with video_context(input_path) as video:
+            # Create backup of original file if it doesn't exist
+            if not os.path.exists(input_backup):
+                os.rename(input_path, input_backup)
+                os.symlink(input_backup, input_path)  # Create symlink to original
+
+            with video_context(input_backup) as video:  # Use backup for reading
                 has_audio = extract_audio(video, temp_audio_path, self.logger)
 
                 fps = video.fps
@@ -104,23 +113,41 @@ class VideoUpscaler:
                 if start_frame > 0:
                     self.logger.info(f"Resuming from frame {start_frame}")
 
-                self._process_frames(video, temp_output_path, width, height, fps,
+                # Write to temporary video file
+                self._process_frames(video, temp_video_path, width, height, fps,
                                      total_frames, start_frame, output_path)
 
-            if has_audio:
-                merge_audio(temp_output_path, temp_audio_path, output_path, self.logger)
-            else:
-                os.rename(temp_output_path, output_path)
+                # Handle audio merging
+                if has_audio:
+                    merge_audio(temp_video_path, temp_audio_path, output_path, self.logger)
+                else:
+                    os.rename(temp_video_path, output_path)
 
-            if os.path.exists(f"{output_path}.progress"):
-                os.remove(f"{output_path}.progress")
+                if os.path.exists(f"{output_path}.progress"):
+                    os.remove(f"{output_path}.progress")
+
+        except Exception as e:
+            self.logger.error(f"Error processing video: {str(e)}")
+            # Restore original file if something went wrong
+            if os.path.exists(input_backup):
+                if os.path.islink(input_path):
+                    os.unlink(input_path)
+                os.rename(input_backup, input_path)
+            raise
 
         finally:
+            # Cleanup temporary files
             self.cache_hits = 0
             self.total_frames = 0
-            for temp_file in [temp_output_path, temp_audio_path]:
+            for temp_file in [temp_video_path, temp_audio_path]:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
+
+            # Remove backup if everything went well
+            if os.path.exists(input_backup):
+                if os.path.islink(input_path):
+                    os.unlink(input_path)
+                os.rename(input_backup, input_path)
 
     def _log_video_info(self, width, height, fps, duration, total_frames):
         self.logger.info(f"\nVideo Info:")
@@ -182,7 +209,6 @@ class VideoUpscaler:
 
         current_fps = sum(fps_buffer) / len(fps_buffer)
         pbar.set_postfix({
-            'FPS': f"{current_fps:.1f}",
             'Elapsed': f"{(time() - start_time):.1f}s",
             'Cache hits': f"{(self.cache_hits / self.total_frames * 100):.1f}%"
         })
