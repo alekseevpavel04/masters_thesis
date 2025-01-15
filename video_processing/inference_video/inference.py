@@ -31,7 +31,7 @@ class VideoUpscaler:
         self.frame_processor = FrameProcessor(
             model=self.model,
             device=self.device,
-            tile_size=64,
+            tile_size=128,
             overlap=8
         )
         self.progress_manager = ProgressManager()
@@ -71,13 +71,14 @@ class VideoUpscaler:
 
             # Конвертация в TRT
             self.logger.info("Converting model to TRT...")
-            x = torch.randn(1, 3, 64, 64).to(self.device)
+            x = torch.randn(1, 3, 128, 128).to(self.device)
             model_trt = torch2trt(
                 model,
                 [x],
-                max_batch_size=442,
+                max_batch_size=48,
                 fp16_mode=True,
-                max_workspace_size=1 << 25
+                max_workspace_size=1 << 30,
+                use_onnx=True
             )
 
             # Сохраняем сконвертированную модель
