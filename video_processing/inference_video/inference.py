@@ -16,9 +16,8 @@ from src.model import RRDBNet
 
 
 class VideoUpscaler:
-    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1, num_workers=4):
+    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1):
         self.batch_size = batch_size
-        self.num_workers = num_workers
         self.total_frames = 0
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -26,7 +25,12 @@ class VideoUpscaler:
         self.logger.info(f"Using device: {self.device}")
 
         self.model = self._load_model(model_path)
-        self.frame_processor = FrameProcessor(self.model, self.device)
+        self.frame_processor = FrameProcessor(
+            model=self.model,
+            device=self.device,
+            tile_size=64,
+            overlap=8
+        )
         self.progress_manager = ProgressManager()
 
     def _load_model(self, model_path):
@@ -170,8 +174,7 @@ def main():
 
         upscaler = VideoUpscaler(
             model_path=model_path,
-            batch_size=1,
-            num_workers=12
+            batch_size=2
         )
 
         for i, input_file in enumerate(input_files, 1):
