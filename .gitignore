@@ -49,3 +49,4 @@ venv_win/
 /cuda-keyring_1.1-1_all.deb
 /torch2trt/
 /video_processing/inference_video/upscaler.log
+/video_processing/inference_video/model/RealESRGAN_final_trt.pth

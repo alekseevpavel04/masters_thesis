@@ -10,21 +10,24 @@ from utils import (
     ProgressManager,
     FrameProcessor
 )
+from torch2trt import torch2trt
 import sys
 sys.path.append('../..')
 from src.model import RRDBNet
 
 
 class VideoUpscaler:
-    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1):
+    def __init__(self, model_path='model/RealESRGAN_final.pth', batch_size=1, use_trt = True):
         self.batch_size = batch_size
         self.total_frames = 0
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.logger = setup_logger()
         self.logger.info(f"Using device: {self.device}")
-
-        self.model = self._load_model(model_path)
+        if use_trt:
+            self.model = self._load_model_trt(model_path)
+        else:
+            self.model = self._load_model(model_path)
         self.frame_processor = FrameProcessor(
             model=self.model,
             device=self.device,
@@ -32,6 +35,61 @@ class VideoUpscaler:
             overlap=8
         )
         self.progress_manager = ProgressManager()
+
+    def _load_model_trt(self, model_path):
+        try:
+            # Загрузка базовой модели
+            model = RRDBNet(in_nc=3, out_nc=3, nf=64, nb=23, gc=32, scale=2)
+            loadnet = torch.load(model_path, map_location=self.device, weights_only=True)
+
+            if 'params_ema' in loadnet:
+                model.load_state_dict(loadnet['params_ema'])
+            else:
+                model.load_state_dict(loadnet)
+
+            model = model.to(self.device)
+            model.eval()
+
+            # Путь к сохраненной TRT модели
+            trt_path = model_path.replace('.pth', '_trt.pth')
+
+            # Проверяем существование сохраненной TRT модели
+            if os.path.exists(trt_path):
+                self.logger.info("Loading cached TRT model...")
+                try:
+                    from torch2trt import TRTModule
+                    model_trt = TRTModule()
+                    model_trt.load_state_dict(torch.load(trt_path,weights_only=True))
+
+                    self.logger.info("Cached TRT model loaded successfully")
+                    return model_trt
+
+                except Exception as e:
+                    self.logger.warning(f"Failed to load cached TRT model: {e}")
+                    if os.path.exists(trt_path):
+                        os.remove(trt_path)
+
+            # Конвертация в TRT
+            self.logger.info("Converting model to TRT...")
+            x = torch.randn(1, 3, 64, 64).to(self.device)
+            model_trt = torch2trt(
+                model,
+                [x],
+                max_batch_size=442,
+                fp16_mode=True,
+                max_workspace_size=1 << 25
+            )
+
+            # Сохраняем сконвертированную модель
+            torch.save(model_trt.state_dict(), trt_path)
+            self.logger.info("Model successfully converted to TRT and cached")
+
+            return model_trt
+
+        except Exception as e:
+            self.logger.error(f"TRT conversion failed: {e}")
+            self.logger.info("Falling back to regular model...")
+            return self._load_model(model_path)
 
     def _load_model(self, model_path):
         try:
@@ -174,7 +232,8 @@ def main():
 
         upscaler = VideoUpscaler(
             model_path=model_path,
-            batch_size=2
+            batch_size=1,
+            use_trt = True
         )
 
         for i, input_file in enumerate(input_files, 1):

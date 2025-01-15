@@ -9,74 +9,103 @@ class TiledProcessor:
         self.overlap = overlap
 
     def split_image(self, image):
-        """Split image into overlapping tiles"""
+        """Split image into overlapping tiles with strict edge alignment"""
         h, w = image.shape[:2]
 
         # Calculate effective stride (tile_size - overlap)
         stride = self.tile_size - self.overlap
 
-        # Calculate number of tiles in each dimension
-        n_h = (h - self.overlap) // stride
-        n_w = (w - self.overlap) // stride
-
-        # Adjust n_h and n_w to ensure coverage of the entire image
-        if h > n_h * stride + self.overlap:
-            n_h += 1
-        if w > n_w * stride + self.overlap:
-            n_w += 1
+        # Calculate number of tiles needed
+        n_h = max(1, (h + stride - 1) // stride)
+        n_w = max(1, (w + stride - 1) // stride)
 
         tiles = []
         positions = []
 
         for i in range(n_h):
             for j in range(n_w):
-                # Calculate tile position
-                top = min(i * stride, h - self.tile_size)
-                left = min(j * stride, w - self.tile_size)
+                # For middle tiles, use normal stride
+                left = j * stride
+                top = i * stride
+
+                # For edge tiles, align strictly with image boundary
+                if i == n_h - 1:  # Last row
+                    top = max(0, h - self.tile_size)
+                if j == n_w - 1:  # Last column
+                    left = max(0, w - self.tile_size)
+
+                # Special case for small images
+                if h < self.tile_size:
+                    top = 0
+                if w < self.tile_size:
+                    left = 0
 
                 # Extract tile
-                tile = image[top:top + self.tile_size, left:left + self.tile_size]
+                tile = image[top:min(top + self.tile_size, h),
+                       left:min(left + self.tile_size, w)]
+
+                # Pad if necessary (for edge tiles that might be smaller)
+                if tile.shape[0] < self.tile_size or tile.shape[1] < self.tile_size:
+                    padded_tile = np.zeros((self.tile_size, self.tile_size, 3), dtype=np.uint8)
+                    padded_tile[:tile.shape[0], :tile.shape[1]] = tile
+                    tile = padded_tile
+
                 tiles.append(tile)
                 positions.append((top, left))
 
         return tiles, positions, (n_h, n_w)
 
     def merge_tiles(self, tiles, positions, original_shape, scale_factor=2):
-        """Merge processed tiles back into a single image"""
+        """Merge processed tiles with strict edge handling"""
         h, w = original_shape[:2]
         out_h, out_w = h * scale_factor, w * scale_factor
         output = np.zeros((out_h, out_w, 3), dtype=np.float32)
         weights = np.zeros((out_h, out_w, 1), dtype=np.float32)
 
         # Create weight mask for blending
-        weight_mask = np.ones((self.tile_size * scale_factor, self.tile_size * scale_factor, 1))
-        for i in range(self.overlap * scale_factor):
-            weight_mask[i, :, 0] *= i / (self.overlap * scale_factor)
-            weight_mask[-i - 1, :, 0] *= i / (self.overlap * scale_factor)
-            weight_mask[:, i, 0] *= i / (self.overlap * scale_factor)
-            weight_mask[:, -i - 1, 0] *= i / (self.overlap * scale_factor)
+        weight_mask = np.ones((self.tile_size * scale_factor,
+                               self.tile_size * scale_factor, 1))
+
+        # Apply smoother blending only for overlapping regions
+        overlap_scaled = self.overlap * scale_factor
+        for i in range(overlap_scaled):
+            # Using smooth cubic interpolation for weight transition
+            factor = (i / overlap_scaled) * (i / overlap_scaled) * (3 - 2 * i / overlap_scaled)
+            weight_mask[i, :, 0] *= factor
+            weight_mask[-i - 1, :, 0] *= factor
+            weight_mask[:, i, 0] *= factor
+            weight_mask[:, -i - 1, 0] *= factor
 
         for tile, (top, left) in zip(tiles, positions):
-            top *= scale_factor
-            left *= scale_factor
+            # Scale positions for output resolution
+            top_scaled = top * scale_factor
+            left_scaled = left * scale_factor
 
-            # Calculate position for upscaled tile
-            h_end = min(top + self.tile_size * scale_factor, out_h)
-            w_end = min(left + self.tile_size * scale_factor, out_w)
-            h_start = top
-            w_start = left
+            # Calculate output tile size
+            out_tile_h = min(self.tile_size * scale_factor, out_h - top_scaled)
+            out_tile_w = min(self.tile_size * scale_factor, out_w - left_scaled)
 
-            # Get the region of the tile that fits
-            tile_h = h_end - h_start
-            tile_w = w_end - w_start
+            # Handle edge cases
+            if top_scaled + out_tile_h > out_h:
+                out_tile_h = out_h - top_scaled
+            if left_scaled + out_tile_w > out_w:
+                out_tile_w = out_w - left_scaled
 
             # Add tile to output with weight mask
-            output[h_start:h_end, w_start:w_end] += tile[:tile_h, :tile_w] * weight_mask[:tile_h, :tile_w]
-            weights[h_start:h_end, w_start:w_end] += weight_mask[:tile_h, :tile_w]
+            output_slice = output[top_scaled:top_scaled + out_tile_h,
+                           left_scaled:left_scaled + out_tile_w]
+            weights_slice = weights[top_scaled:top_scaled + out_tile_h,
+                            left_scaled:left_scaled + out_tile_w]
 
-        # Normalize by weights to blend tiles
+            tile_scaled = tile[:out_tile_h, :out_tile_w]
+            mask_slice = weight_mask[:out_tile_h, :out_tile_w]
+
+            output_slice += tile_scaled * mask_slice
+            weights_slice += mask_slice
+
+        # Normalize by weights
         output = np.divide(output, weights, where=weights != 0)
-        return output
+        return (output * 255).clip(0, 255).astype(np.uint8)
 
 
 class FrameProcessor:
@@ -90,6 +119,9 @@ class FrameProcessor:
             cudnn.deterministic = False
             cudnn.allow_tf32 = True
             torch.backends.cuda.matmul.allow_tf32 = True
+            self.stream = torch.cuda.Stream()
+        else:
+            self.stream = None
 
         self.memory_format = torch.channels_last if device.type == 'cuda' else torch.contiguous_format
         self.model = self.model.to(memory_format=self.memory_format)
@@ -98,16 +130,14 @@ class FrameProcessor:
         # Разбиваем все кадры на тайлы одновременно
         all_tiles = []
         all_positions = []
-        frame_tile_counts = []  # Сохраняем количество тайлов для каждого кадра
+        frame_tile_counts = []
 
-        # Собираем все тайлы со всех кадров
         for frame in frames:
             tiles, positions, _ = self.tiled_processor.split_image(frame)
             all_tiles.extend(tiles)
             all_positions.append(positions)
             frame_tile_counts.append(len(tiles))
 
-        # Преобразуем все тайлы в тензор и обрабатываем за один проход
         tiles_tensor = torch.from_numpy(
             np.array(all_tiles).astype(np.float32) / 255.
         ).permute(0, 3, 1, 2)
@@ -117,18 +147,18 @@ class FrameProcessor:
 
         tiles_tensor = tiles_tensor.to(self.device)
 
-        # Обрабатываем все тайлы одним батчем
-        with torch.amp.autocast(device_type=self.device.type, enabled=self.device.type == 'cuda'):
-            with torch.no_grad():
-                output = self.model(tiles_tensor)
+        with torch.cuda.stream(self.stream) if self.stream else nullcontext():
+            with torch.amp.autocast(device_type=self.device.type, enabled=self.device.type == 'cuda'):
+                with torch.no_grad():
+                    output = self.model(tiles_tensor)
 
-        processed_tiles = output.permute(0, 2, 3, 1).cpu().numpy()
-        processed_tiles = processed_tiles.clip(0, 1)
+            processed_tiles = output.permute(0, 2, 3, 1).cpu().numpy()
+            processed_tiles = processed_tiles.clip(0, 1)
 
-        if self.device.type == 'cuda':
-            torch.cuda.empty_cache()
+            if self.device.type == 'cuda':
+                self.stream.synchronize()
+                torch.cuda.empty_cache()
 
-        # Собираем кадры обратно
         processed_frames = []
         start_idx = 0
 
@@ -142,7 +172,6 @@ class FrameProcessor:
                 frame.shape
             )
 
-            merged_frame = (merged_frame * 255).clip(0, 255).astype(np.uint8)
             processed_frames.append(merged_frame)
             start_idx += n_tiles
 
