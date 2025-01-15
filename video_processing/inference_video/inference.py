@@ -51,18 +51,6 @@ class VideoUpscaler:
             self.logger.error(f"Failed to load model: {str(e)}")
             raise
 
-    def enhance_frame(self, img):
-        self.total_frames += 1
-        cached_frame = self.frame_cache.get(img)
-
-        if cached_frame is not None:
-            self.cache_hits += 1
-            return cached_frame
-
-        enhanced_img = self.frame_processor.process_frame(img, self.frame_cache)
-        self.frame_cache.put(img, enhanced_img)
-        return enhanced_img
-
     def enhance_batch(self, frames):
         enhanced_frames = []
         uncached_frames = []
