@@ -75,7 +75,7 @@ class VideoUpscaler:
             model_trt = torch2trt(
                 model,
                 [x],
-                max_batch_size=48,
+                max_batch_size=96,
                 fp16_mode=True,
                 max_workspace_size=1 << 30,
                 use_onnx=True
@@ -233,7 +233,7 @@ def main():
 
         upscaler = VideoUpscaler(
             model_path=model_path,
-            batch_size=1,
+            batch_size=2,
             use_trt = True
         )
 
