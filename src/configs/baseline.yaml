@@ -26,7 +26,7 @@ loss_function_gen:
 loss_function_disc:
   _target_: src.loss.AdversarialLoss
 trainer:
-  log_step: 50
+  log_step: 10
   n_epochs: 10
   epoch_len: 2000
   disc_steps: 10
