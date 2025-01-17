@@ -26,22 +26,22 @@ venv/
 venv_win/
 
 # Изображения и видео
-/dataset_building/**/*.jpg
-/dataset_building/**/*.jpeg
-/dataset_building/**/*.png
-/dataset_building/**/*.gif
-/dataset_building/**/*.mp4
-/dataset_building/**/*.mov
-/dataset_building/**/*.avi
-/dataset_building/**/*.mkv
-/dataset_building/**/*.webm
-/dataset_building/dataset_preparation/SR_dataset_test
-/dataset_building/dataset_preparation/SR_dataset_test.zip
-/dataset_building/dataset_preparation/SR_dataset_val
-/dataset_building/dataset_preparation/SR_dataset_val.zip
+dataset_preparation/*.jpg
+dataset_preparation/*.jpeg
+dataset_preparation/*.png
+dataset_preparation/*.gif
+dataset_preparation/*.mp4
+dataset_preparation/*.mov
+dataset_preparation/*.avi
+dataset_preparation/*.mkv
+dataset_preparation/*.webm
+/dataset_preparation/SR_dataset_test
+/dataset_preparation/SR_dataset_test.zip
+/dataset_preparation/SR_dataset_val
+/dataset_preparation/SR_dataset_val.zip
 
 # Логи
-/dataset_building/dataset_preparation/logs/*.log
+/dataset_preparation/logs/*.log
 /inference_video/logs/*.log
 
 # Модели
