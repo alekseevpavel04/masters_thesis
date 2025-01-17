@@ -8,10 +8,12 @@ This module is part of a larger project focused on AI-based video upscaling. It 
 
 This module is not a standalone application and should be used as part of the larger project. Below is the structure of this module:
 
-- `input/`: Place your input video files here. See [place_input_videos_here.md](place_input_videos_here.md).
-- `output/`: Processed (upscaled) videos will appear here. See [output_video_will_appear_here.md](output_video_will_appear_here.md).
-- `model/`: Pre-trained model files will appear here after running `download_assets.sh`. See [inference_model_will_appear_here.md](inference_model_will_appear_here.md).
-- `logs/`: Log files will appear here. See [logs_will_appear_here.md](logs_will_appear_here.md).
+- `input/`: Place your input video files here. See [input/README.md](input/README.md).
+- `output/`: Processed (upscaled) videos will appear here. See [output/README.md](output/README.md).
+- `model/`: Pre-trained model files will appear here after running `download_assets.sh`. See [model/README.md](model/README.md).
+- `logs/`: Log files will appear here. See [logs/README.md](logs/README.md).
+
+
 
 ---
 
