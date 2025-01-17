@@ -54,11 +54,10 @@ download_file() {
 
 # File URLs to download
 FILE_final_URL="https://drive.google.com/uc?id=1IA-oHhhxEil2luFEsoFxsSH6jXMQwyeH"
-VIDEO_EXAMPLE1_URL="https://drive.google.com/uc?id=1FS6DMhbw2ZsrGm7sJbzexptQbxU3n7GM"
-VIDEO_EXAMPLE2_URL="https://drive.google.com/uc?id=11KpTN8knL93QfCZJbpeoLTAV2t2Ty4Rf"
-
+VIDEO_EXAMPLE1_URL="https://drive.google.com/uc?id=1CjhdvK5g6prHgTItFDEsK4VKHG7kfWOI"
+VIDEO_EXAMPLE2_URL="https://drive.google.com/uc?id=10rGqcf852RUqLTGabwnQXrnE-F0h0PUa"
 # Download files
 download_file "$FILE_final_URL" "$TARGET_DIR_final/RealESRGAN_final.pth"
-download_file "$VIDEO_EXAMPLE1_URL" "$VIDEO_DIR/video_example_960x720.mkv"
-download_file "$VIDEO_EXAMPLE2_URL" "$VIDEO_DIR/video_example_320x240.mkv"
+download_file "$VIDEO_EXAMPLE1_URL" "$VIDEO_DIR/video_example_640x480.mkv"
+download_file "$VIDEO_EXAMPLE2_URL" "$VIDEO_DIR/video_example_480x360.mkv"
 echo "Download complete. Files saved to: $TARGET_DIR_final and $VIDEO_DIR"
