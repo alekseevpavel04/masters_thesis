@@ -11,6 +11,8 @@ class Trainer(BaseTrainer):
         self.content_weight = 1.0
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.current_accumulation_step = 0
+        # Храним только последние метрики
+        self.last_metrics = {}
 
     def _reset_accumulation_step(self):
         """Reset gradient accumulation counter"""
@@ -20,10 +22,10 @@ class Trainer(BaseTrainer):
         self._reset_accumulation_step()
         try:
             result = super()._train_epoch(epoch)
-            torch.cuda.empty_cache()  # Очистка в конце эпохи
+            torch.cuda.empty_cache()
             return result
         except Exception as e:
-            torch.cuda.empty_cache()  # Очистка при ошибке
+            torch.cuda.empty_cache()
             raise e
 
     def process_batch(self, batch, metrics: MetricTracker):
@@ -130,24 +132,43 @@ class Trainer(BaseTrainer):
 
                     batch["loss"] = batch["gen_loss"] + batch["disc_loss"]
 
-            # Update metrics
-            for met in metric_funcs:
-                metrics.update(met.name, met(**batch))
+            # Update metrics only for logging step
+            if self.is_train and (self.current_accumulation_step + 1) % self.log_step == 0:
+                # Store only the metrics we need for logging
+                self.last_metrics = {}
+                for met in metric_funcs:
+                    self.last_metrics[met.name] = met(**batch)
+                # Store current losses
+                self.last_metrics["gen_loss"] = batch["gen_loss"].item()
+                self.last_metrics["disc_loss"] = batch["disc_loss"].item()
+                # Update MetricTracker only with the latest values
+                for name, value in self.last_metrics.items():
+                    metrics.update(name, value)
+            elif not self.is_train:
+                # During inference, update all metrics
+                for met in metric_funcs:
+                    metrics.update(met.name, met(**batch))
 
             return batch
 
         except Exception as e:
-            # Clean up on error
             torch.cuda.empty_cache()
             raise e
 
     def _log_batch(self, batch_idx, batch, mode="train"):
         if mode == "train":
             if batch_idx % self.log_step == 0:
-                self.writer.add_images("train/real", batch["data_object"][0:1])
-                self.writer.add_images("train/generated", batch["gen_output"][0:1])
-                self.writer.add_images("train/low_res", batch["lr_image"][0:1])
+                # Log only single image for visualization
+                with torch.no_grad():
+                    self.writer.add_images("train/real", batch["data_object"][:1].detach())
+                    self.writer.add_images("train/generated", batch["gen_output"][:1].detach())
+                    self.writer.add_images("train/low_res", batch["lr_image"][:1].detach())
+                # Clear references to ensure memory is freed
+                torch.cuda.empty_cache()
         else:
-            self.writer.add_images("val/real", batch["data_object"][0:1])
-            self.writer.add_images("val/generated", batch["gen_output"][0:1])
-            self.writer.add_images("val/low_res", batch["lr_image"][0:1])
+            # During validation, also log only single image
+            with torch.no_grad():
+                self.writer.add_images("val/real", batch["data_object"][:1].detach())
+                self.writer.add_images("val/generated", batch["gen_output"][:1].detach())
+                self.writer.add_images("val/low_res", batch["lr_image"][:1].detach())
+            torch.cuda.empty_cache()
