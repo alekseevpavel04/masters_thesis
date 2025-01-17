@@ -60,21 +60,22 @@ class TiledProcessor:
         h, w = original_shape[:2]
         out_h, out_w = h * scale_factor, w * scale_factor
         output = np.zeros((out_h, out_w, 3), dtype=np.float32)
-        weights = np.zeros((out_h, out_w, 1), dtype=np.float32)
+        weights = np.zeros((out_h, out_w, 3), dtype=np.float32)  # Changed to match output dimensions
 
         # Create weight mask for blending
         weight_mask = np.ones((self.tile_size * scale_factor,
-                               self.tile_size * scale_factor, 1))
+                               self.tile_size * scale_factor, 3), dtype=np.float32)  # Changed to 3 channels
 
         # Apply smoother blending only for overlapping regions
         overlap_scaled = self.overlap * scale_factor
-        for i in range(overlap_scaled):
-            # Using smooth cubic interpolation for weight transition
-            factor = (i / overlap_scaled) * (i / overlap_scaled) * (3 - 2 * i / overlap_scaled)
-            weight_mask[i, :, 0] *= factor
-            weight_mask[-i - 1, :, 0] *= factor
-            weight_mask[:, i, 0] *= factor
-            weight_mask[:, -i - 1, 0] *= factor
+        if overlap_scaled > 0:
+            for i in range(overlap_scaled):
+                # Using smooth cubic interpolation for weight transition
+                factor = (i / overlap_scaled) * (i / overlap_scaled) * (3 - 2 * i / overlap_scaled)
+                weight_mask[i, :, :] *= factor
+                weight_mask[-i - 1, :, :] *= factor
+                weight_mask[:, i, :] *= factor
+                weight_mask[:, -i - 1, :] *= factor
 
         for tile, (top, left) in zip(tiles, positions):
             # Scale positions for output resolution
@@ -86,10 +87,11 @@ class TiledProcessor:
             out_tile_w = min(self.tile_size * scale_factor, out_w - left_scaled)
 
             # Handle edge cases
-            if top_scaled + out_tile_h > out_h:
-                out_tile_h = out_h - top_scaled
-            if left_scaled + out_tile_w > out_w:
-                out_tile_w = out_w - left_scaled
+            if out_tile_h <= 0 or out_tile_w <= 0:
+                continue
+
+            # Ensure tile data is in float32 range [0, 1]
+            tile = np.clip(tile, 0, 1)
 
             # Add tile to output with weight mask
             output_slice = output[top_scaled:top_scaled + out_tile_h,
@@ -103,9 +105,12 @@ class TiledProcessor:
             output_slice += tile_scaled * mask_slice
             weights_slice += mask_slice
 
-        # Normalize by weights
-        output = np.divide(output, weights, where=weights != 0)
-        return (output * 255).clip(0, 255).astype(np.uint8)
+        # Avoid division by zero
+        mask = (weights > 1e-8)
+        np.divide(output, weights, out=output, where=mask)
+
+        # Convert to uint8 safely
+        return np.clip(output * 255.0, 0, 255).astype(np.uint8)
 
 
 class FrameProcessor:
