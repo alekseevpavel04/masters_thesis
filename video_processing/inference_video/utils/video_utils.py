@@ -10,12 +10,23 @@ import io
 
 @contextmanager
 def video_context(path):
-    """Context manager for safe video handling with accurate frame counting"""
+    """
+    Context manager for safe video handling with accurate frame counting.
+
+    Args:
+        path (str): Path to the video file.
+
+    Yields:
+        VideoFileClip: Video object for processing.
+
+    Raises:
+        RuntimeError: If an error occurs during video processing.
+    """
     video = None
-    # Сохраняем оригинальный stdout
+    # Save original stdout
     original_stdout = sys.stdout
     try:
-        # Перенаправляем stdout в null для подавления вывода VideoFileClip
+        # Redirect stdout to suppress VideoFileClip output
         sys.stdout = io.StringIO()
 
         # First, use cv2 to get accurate frame count
@@ -34,7 +45,12 @@ def video_context(path):
         video.duration = total_frames / fps if fps > 0 else video.duration
 
         def safe_iter_frames():
-            """Iterator that ensures safe frame reading with proper validation"""
+            """
+            Iterator that ensures safe frame reading with proper validation.
+
+            Yields:
+                numpy.ndarray: Valid frame from the video.
+            """
             with VideoFileClip(path) as temp_video:
                 last_valid_frame = None
                 frame_count = 0
@@ -66,13 +82,24 @@ def video_context(path):
     except Exception as e:
         raise RuntimeError(f"Error processing video {path}: {str(e)}")
     finally:
-        # Восстанавливаем оригинальный stdout
+        # Restore original stdout
         sys.stdout = original_stdout
         if video is not None:
             video.close()
 
+
 def extract_audio(video, temp_audio_path, logger):
-    """Extract audio from video file"""
+    """
+    Extract audio from a video file.
+
+    Args:
+        video: Video object.
+        temp_audio_path (str): Path to save the extracted audio.
+        logger: Logger instance for logging messages.
+
+    Returns:
+        bool: True if audio extraction is successful, False otherwise.
+    """
     try:
         if video.audio is not None:
             video.audio.write_audiofile(
@@ -91,7 +118,15 @@ def extract_audio(video, temp_audio_path, logger):
 
 
 def merge_audio(video_path, audio_path, output_path, logger):
-    """Merge video and audio files"""
+    """
+    Merge video and audio files.
+
+    Args:
+        video_path (str): Path to the video file.
+        audio_path (str): Path to the audio file.
+        output_path (str): Path to save the merged output.
+        logger: Logger instance for logging messages.
+    """
     logger.info("Merging video with audio...")
     try:
         cmd = [

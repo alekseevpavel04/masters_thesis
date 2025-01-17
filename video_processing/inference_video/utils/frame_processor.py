@@ -4,12 +4,37 @@ import numpy as np
 
 
 class TiledProcessor:
+    """
+    A class for processing images in tiles, handling overlapping regions for seamless merging.
+
+    Attributes:
+        tile_size (int): Size of each tile.
+        overlap (int): Overlap between adjacent tiles.
+    """
+
     def __init__(self, tile_size=64, overlap=8):
+        """
+        Initialize the TiledProcessor with specified tile size and overlap.
+
+        Args:
+            tile_size (int): Size of each tile.
+            overlap (int): Overlap between adjacent tiles.
+        """
         self.tile_size = tile_size
         self.overlap = overlap
 
     def split_image(self, image):
-        """Split image into overlapping tiles with strict edge alignment"""
+        """
+        Split an image into overlapping tiles with strict edge alignment.
+
+        Args:
+            image (numpy.ndarray): Input image to be split into tiles.
+
+        Returns:
+            list: List of tiles.
+            list: List of tile positions.
+            tuple: Number of tiles in height and width.
+        """
         h, w = image.shape[:2]
 
         # Calculate effective stride (tile_size - overlap)
@@ -56,7 +81,18 @@ class TiledProcessor:
         return tiles, positions, (n_h, n_w)
 
     def merge_tiles(self, tiles, positions, original_shape, scale_factor=2):
-        """Merge processed tiles with strict edge handling"""
+        """
+        Merge processed tiles with strict edge handling.
+
+        Args:
+            tiles (list): List of processed tiles.
+            positions (list): List of tile positions.
+            original_shape (tuple): Original shape of the image.
+            scale_factor (int): Scaling factor for the output.
+
+        Returns:
+            numpy.ndarray: Merged image.
+        """
         h, w = original_shape[:2]
         out_h, out_w = h * scale_factor, w * scale_factor
         output = np.zeros((out_h, out_w, 3), dtype=np.float32)
@@ -114,7 +150,27 @@ class TiledProcessor:
 
 
 class FrameProcessor:
+    """
+    A class for processing video frames using a deep learning model.
+
+    Attributes:
+        model: The deep learning model for frame processing.
+        device: The device (CPU or GPU) used for computation.
+        tiled_processor: Instance of TiledProcessor for handling tiled processing.
+        stream: CUDA stream for asynchronous processing (if using GPU).
+        memory_format: Memory format for tensor storage.
+    """
+
     def __init__(self, model, device, tile_size=64, overlap=8):
+        """
+        Initialize the FrameProcessor with the model, device, and tiling parameters.
+
+        Args:
+            model: The deep learning model for frame processing.
+            device: The device (CPU or GPU) used for computation.
+            tile_size (int): Size of each tile.
+            overlap (int): Overlap between adjacent tiles.
+        """
         self.model = model
         self.device = device
         self.tiled_processor = TiledProcessor(tile_size=tile_size, overlap=overlap)
@@ -132,7 +188,16 @@ class FrameProcessor:
         self.model = self.model.to(memory_format=self.memory_format)
 
     def process_batch(self, frames):
-        # Разбиваем все кадры на тайлы одновременно
+        """
+        Process a batch of frames using the model.
+
+        Args:
+            frames (list): List of input frames to process.
+
+        Returns:
+            list: List of processed frames.
+        """
+        # Split all frames into tiles
         all_tiles = []
         all_positions = []
         frame_tile_counts = []
@@ -143,6 +208,7 @@ class FrameProcessor:
             all_positions.append(positions)
             frame_tile_counts.append(len(tiles))
 
+        # Convert tiles to tensor and normalize
         tiles_tensor = torch.from_numpy(
             np.array(all_tiles).astype(np.float32) / 255.
         ).permute(0, 3, 1, 2)
@@ -152,6 +218,7 @@ class FrameProcessor:
 
         tiles_tensor = tiles_tensor.to(self.device)
 
+        # Process tiles using the model
         with torch.cuda.stream(self.stream) if self.stream else nullcontext():
             with torch.amp.autocast(device_type=self.device.type, enabled=self.device.type == 'cuda'):
                 with torch.no_grad():
@@ -164,6 +231,7 @@ class FrameProcessor:
                 self.stream.synchronize()
                 torch.cuda.empty_cache()
 
+        # Merge processed tiles back into frames
         processed_frames = []
         start_idx = 0
 

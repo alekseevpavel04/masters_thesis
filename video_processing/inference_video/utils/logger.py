@@ -4,7 +4,12 @@ from datetime import datetime
 
 
 def setup_logger():
-    """Configure and return the logger instance with timestamped files in logs directory"""
+    """
+    Configure and return the logger instance with timestamped files in the logs directory.
+
+    Returns:
+        logging.Logger: Configured logger instance.
+    """
     # Create logs directory if it doesn't exist
     logs_dir = 'logs'
     if not os.path.exists(logs_dir):
