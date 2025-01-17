@@ -14,7 +14,7 @@ from torch2trt import torch2trt
 import sys
 
 # Add the parent directory to the system path to import the model
-sys.path.append('../..')
+sys.path.append('../')
 from src.model import RRDBNet
 
 
