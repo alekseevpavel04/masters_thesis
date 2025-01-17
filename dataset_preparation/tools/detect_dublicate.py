@@ -1,19 +1,34 @@
 import os
 from PIL import Image
 import imagehash
-from tools.logger_config import setup_logger 
+from tools.logger_config import setup_logger
+
+logger = setup_logger("ImageDeduplicator")
 
 class ImageDeduplicator:
+    """
+    A class to detect and remove duplicate images from a dataset based on image hashing.
+    """
+
     def __init__(self, output_dir="output_images", threshold=5):
+        """
+        Initializes the ImageDeduplicator class.
+
+        Args:
+            output_dir (str): Directory where the images are stored.
+            threshold (int): Threshold for determining image similarity.
+        """
         self.output_dir = output_dir
         self.threshold = threshold
         self.hashes = {}
-        self.duplicates = set()  # Используем set для уникальных дубликатов
-        self.logger = setup_logger("ImageDeduplicator")  # Настраиваем логгер
+        self.duplicates = set()  # Using a set to store unique duplicates
+        self.logger = logger
 
     def find_similar_images(self):
-        """Находит похожие изображения в указанной папке."""
-        self.logger.info("Начинаем поиск похожих изображений.")
+        """
+        Finds similar images in the specified directory based on image hashing.
+        """
+        self.logger.info("Starting to find similar images.")
         for filename in os.listdir(self.output_dir):
             if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
                 image_path = os.path.join(self.output_dir, filename)
@@ -21,47 +36,49 @@ class ImageDeduplicator:
                     image = Image.open(image_path)
                     hash_value = imagehash.phash(image)
 
-                    # Проверка на наличие похожих изображений
+                    # Check for similar images
                     for existing_hash in self.hashes:
                         if hash_value - existing_hash < self.threshold:
-                            # Добавляем в множество уникальных дубликатов
+                            # Add to the set of unique duplicates
                             self.duplicates.add((filename, self.hashes[existing_hash]))
 
-                    # Сохраняем хэш изображения
+                    # Save the image hash
                     self.hashes[hash_value] = filename
                 except Exception as e:
-                    self.logger.error(f"Ошибка при обработке изображения {filename}: {e}")
+                    self.logger.error(f"Error processing image {filename}: {e}")
 
     def remove_duplicates(self):
-        """Удаляет дубликаты изображений."""
+        """
+        Removes duplicate images from the directory.
+        """
         if not self.duplicates:
-            self.logger.info("Нет дубликатов для удаления.")
+            self.logger.info("No duplicates to remove.")
             return
 
-        total_images = len(self.hashes)  # Общее количество изображений
-        removed_count = 0  # Количество удаленных дубликатов
+        total_images = len(self.hashes)  # Total number of images
+        removed_count = 0  # Number of removed duplicates
 
         for img1, img2 in self.duplicates:
             img_path = os.path.join(self.output_dir, img2)
-            if os.path.exists(img_path):  # Проверка на существование файла
-                # self.logger.info(f"Удаляем дубликат: {img_path}")
+            if os.path.exists(img_path):  # Check if the file exists
                 os.remove(img_path)
-                removed_count += 1  # Увеличиваем счетчик удаленных изображений
+                removed_count += 1  # Increment the count of removed images
             else:
-                pass
-                # self.logger.warning(f"Файл не найден, пропускаем: {img_path}")
+                self.logger.warning(f"File not found, skipping: {img_path}")
 
-        return total_images, removed_count  # Возвращаем общее количество и количество удаленных изображений
+        return total_images, removed_count  # Return total and removed counts
 
     def deduplicate_images(self):
-        """Основной метод для поиска и удаления дубликатов."""
+        """
+        Main method to find and remove duplicate images.
+        """
         self.find_similar_images()
         total_images, removed_count = self.remove_duplicates()
-        self.logger.info("Процесс удаления дубликатов завершен.")
+        self.logger.info("Duplicate removal process completed.")
 
-        # Расчет доли удаленных изображений
+        # Calculate the fraction of removed images
         if total_images > 0:
             removal_fraction = removed_count / total_images
-            self.logger.info(f"Удалено {removed_count} дубликатов из {total_images} изображений. Доля удаленных: {removal_fraction:.2%}")
+            self.logger.info(f"Removed {removed_count} duplicates out of {total_images} images. Removal fraction: {removal_fraction:.2%}")
         else:
-            self.logger.info("Нет изображений для обработки.")
+            self.logger.info("No images to process.")
