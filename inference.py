@@ -43,12 +43,15 @@ def main(config):
 
     log_step = config.inferencer.log_step
 
+    degrader = instantiate(config.degradation)
+
     # save_path for generated high-resolution images
     save_path = ROOT_PATH / "data" / "saved" / config.inferencer.save_path
     save_path.mkdir(exist_ok=True, parents=True)
 
     inferencer = Inferencer(
         model_gen=model_gen,
+        degrader=degrader,
         config=config,
         device=device,
         dataloaders=dataloaders,

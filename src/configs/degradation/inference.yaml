@@ -11,4 +11,4 @@ second_blur_prob: 0.3
 gaussian_noise_prob2: 0.3
 noise_range2: [0.01, 0.05]
 mode: "batch"
-device: "auto"
+device: "cuda"
