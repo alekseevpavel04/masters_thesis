@@ -4,20 +4,13 @@ import random
 import math
 import numpy as np
 from torch.nn import functional as F
-from src.degradation.kernels import (
-    generate_isotropic_gaussian_kernel,
-    generate_anisotropic_gaussian_kernel,
-    generate_generalized_gaussian_kernel,
-    generate_plateau_gaussian_kernel
-)
-from src.degradation.utils import np2tensor, tensor2np, filter2D
 
-class ImageDegrader:
+class ImageDegradationPipeline:
     def __init__(
         self,
         gaussian_noise_prob=0.5,
         noise_range=[0.01, 0.1],
-        kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 
+        kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso',
                     'plateau_iso', 'plateau_aniso'],
         kernel_prob=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
         kernel_range=[2, 4],
@@ -175,6 +168,77 @@ class ImageDegrader:
         return self._process_tensor(hr_batch)
 
 
+def np2tensor(np_frame):
+    """Convert numpy image to torch tensor"""
+    return torch.from_numpy(np.transpose(np_frame, (2, 0, 1))).unsqueeze(0).float() / 255
+
+
+def tensor2np(tensor):
+    """Convert torch tensor to numpy image"""
+    return (np.transpose(tensor.detach().squeeze(0).cpu().numpy(), (1, 2, 0))) * 255
+
+
+def filter2D(img, kernel):
+    """Apply 2D filter to image"""
+    k = kernel.size(-1)
+    b, c, h, w = img.size()
+    if k % 2 == 1:
+        img = F.pad(img, (k // 2, k // 2, k // 2, k // 2), mode='reflect')
+    else:
+        raise ValueError('Wrong kernel size')
+
+    ph, pw = img.size()[-2:]
+    if kernel.size(0) == 1:
+        img = img.view(b * c, 1, ph, pw)
+        kernel = kernel.view(1, 1, k, k)
+        return F.conv2d(img, kernel, padding=0).view(b, c, h, w)
+    else:
+        img = img.view(1, b * c, ph, pw)
+        kernel = kernel.view(b, 1, k, k).repeat(1, c, 1, 1).view(b * c, 1, k, k)
+        return F.conv2d(img, kernel, groups=b * c).view(b, c, h, w)
+
+
+def generate_isotropic_gaussian_kernel(kernel_size, sigma):
+    """Generate isotropic Gaussian kernel"""
+    center = kernel_size // 2
+    x = np.arange(kernel_size) - center
+    x_2d, y_2d = np.meshgrid(x, x)
+    kernel = np.exp(-(x_2d ** 2 + y_2d ** 2) / (2 * sigma ** 2))
+    return kernel
+
+
+def generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation):
+    """Generate anisotropic Gaussian kernel"""
+    center = kernel_size // 2
+    x = np.arange(kernel_size) - center
+    x_2d, y_2d = np.meshgrid(x, x)
+
+    x_rot = x_2d * np.cos(rotation) - y_2d * np.sin(rotation)
+    y_rot = x_2d * np.sin(rotation) + y_2d * np.cos(rotation)
+
+    kernel = np.exp(-(x_rot ** 2 / (2 * sigma_x ** 2) + y_rot ** 2 / (2 * sigma_y ** 2)))
+    return kernel
+
+
+def generate_generalized_gaussian_kernel(kernel_size, sigma_x, beta):
+    """Generate generalized Gaussian kernel"""
+    center = kernel_size // 2
+    x = np.arange(kernel_size) - center
+    x_2d, y_2d = np.meshgrid(x, x)
+    kernel = np.exp(-((x_2d ** 2 + y_2d ** 2) / (2 * sigma_x ** 2)) ** beta)
+    return kernel
+
+
+def generate_plateau_gaussian_kernel(kernel_size, sigma_x, beta):
+    """Generate plateau-shaped Gaussian kernel"""
+    center = kernel_size // 2
+    x = np.arange(kernel_size) - center
+    x_2d, y_2d = np.meshgrid(x, x)
+    r = np.sqrt(x_2d ** 2 + y_2d ** 2)
+    kernel = 1 / (1 + (r / sigma_x) ** beta)
+    return kernel
+
+
 def main():
     # Example usage for single image
     degrader_single = ImageDegrader(mode='single_image')
@@ -190,6 +254,3 @@ def main():
 if __name__ == '__main__':
     main()
     
-# For TRAIN use    
-# degrader = ImageDegrader(mode='batch')
-# lr_batch = degrader.process_batch(hr_batch)

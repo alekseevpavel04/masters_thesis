@@ -1,17 +1,14 @@
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
-from src.degradation import ImageDegrader
 import torch
 
 
 class Trainer(BaseTrainer):
     def __init__(self, *args, gradient_accumulation_steps=1, **kwargs):
         super().__init__(*args, **kwargs)
-        self.degrader = ImageDegrader(mode='batch', device=self.device)
         self.content_weight = 1.0
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.current_accumulation_step = 0
-        # Храним только последние метрики
         self.last_metrics = {}
 
     def _reset_accumulation_step(self):

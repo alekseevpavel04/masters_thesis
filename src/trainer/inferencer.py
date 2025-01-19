@@ -3,7 +3,6 @@ import torch
 from tqdm.auto import tqdm
 from src.metrics.tracker import MetricTracker
 from src.trainer.base_trainer import BaseTrainer
-from src.degradation import ImageDegrader
 
 
 class Inferencer(BaseTrainer):
@@ -24,6 +23,7 @@ class Inferencer(BaseTrainer):
             writer=None,
             logger=None,
             log_step=None,
+            degrader = None,
             batch_transforms=None,
             skip_model_load=False,
     ):
@@ -52,9 +52,7 @@ class Inferencer(BaseTrainer):
         self.writer = writer
         self.logger = logger
         self.log_step = log_step
-
-        # Initialize image degrader for creating low-res inputs
-        self.degrader = ImageDegrader(mode='batch', device=self.device)
+        self.degrader = degrader
 
         # Setup dataloaders
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items()}

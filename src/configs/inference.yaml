@@ -5,6 +5,7 @@ defaults:
   - datasets: inference
   - dataloader: inference
   - transforms: inference
+  - degradation: inference
   - _self_
 
 

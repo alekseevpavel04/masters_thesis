@@ -26,6 +26,7 @@ class BaseTrainer:
         optimizer_disc,
         lr_scheduler_gen,
         lr_scheduler_disc,
+        degrader,
         config,
         device,
         dataloaders,
@@ -80,6 +81,7 @@ class BaseTrainer:
         self.optimizer_disc = optimizer_disc
         self.lr_scheduler_gen = lr_scheduler_gen
         self.lr_scheduler_disc = lr_scheduler_disc
+        self.degrader = degrader
 
         self.batch_transforms = batch_transforms
         self.disc_steps = disc_steps

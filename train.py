@@ -41,7 +41,7 @@ def main(config):
         device = "cuda" if torch.cuda.is_available() else "cpu"
     else:
         device = config.trainer.device
-
+    print(device)
     # setup data_loader instances
     dataloaders, batch_transforms = get_dataloaders(config, device)
 
@@ -71,6 +71,8 @@ def main(config):
     optimizer_disc = instantiate(config.optimizer_disc, params=trainable_params_disc)
     lr_scheduler_disc = instantiate(config.lr_scheduler_disc, optimizer=optimizer_disc)
 
+    degrader = instantiate(config.degradation)
+
     epoch_len = config.trainer.get("epoch_len")
     disc_steps = config.trainer.get("disc_steps")
     gradient_accumulation_steps = config.trainer.get("gradient_accumulation_steps")
@@ -85,6 +87,7 @@ def main(config):
         optimizer_disc=optimizer_disc,
         lr_scheduler_gen=lr_scheduler_gen,
         lr_scheduler_disc=lr_scheduler_disc,
+        degrader=degrader,
         config=config,
         device=device,
         dataloaders=dataloaders,
