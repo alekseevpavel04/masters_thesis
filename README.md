@@ -6,7 +6,7 @@ The project is dedicated to developing a service for enhancing the resolution an
 
 1. **Dataset Preparation Module** — a module for dataset preparation, including frame extraction from videos, filtering out low-quality images, and removing duplicates.
 2. **Video Upscaling Inference Module** — a module for video processing using the **RRDBNet** model and TensorRT optimization for improved GPU performance.
-3. **Main Module** — integration of all components into a single service that takes video as input, performs quality enhancement, and returns the result.
+3. **Main Module** — used for train and image inference.
 
 ## Main Workflow
 
