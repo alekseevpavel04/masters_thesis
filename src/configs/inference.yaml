@@ -18,7 +18,7 @@ inferencer:
   seed: 1
   from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
   resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
-  log_step: 50  # how often to log images during inference
+  log_step: 10  # how often to log images during inference
 
 writer:  # make sure this section matches your wandb.yaml configuration
   run_name: "inference_run"  # name for this inference run

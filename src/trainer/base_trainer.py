@@ -246,7 +246,7 @@ class BaseTrainer:
 
             # Update progress bar description with metrics while keeping the progress bar
             pbar.set_description(
-                f"train | sum_loss: {batch['loss'].item():.3f} | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
+                f"train | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
             )
 
             # Log gradient norms only for specific logging

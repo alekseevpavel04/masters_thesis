@@ -23,9 +23,9 @@ lr_scheduler_disc:
   gamma: 0.9
   step_size: ${trainer.epoch_len}
 loss_function_gen:
-  _target_: src.loss.AdversarialLoss
+  _target_: src.loss.GeneratorCriterion
 loss_function_disc:
-  _target_: src.loss.AdversarialLoss
+  _target_: src.loss.DiscriminatorCriterion
 
 trainer:
   log_step: 10

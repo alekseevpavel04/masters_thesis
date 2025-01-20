@@ -51,12 +51,10 @@ class Trainer(BaseTrainer):
                     disc_real = self.model_disc(batch["data_object"])
 
                     # Calculate discriminator losses
-                    disc_loss_fake = self.criterion_disc(disc_fake, False)
-                    disc_loss_real = self.criterion_disc(disc_real, True)
-                    batch["disc_loss"] = (disc_loss_fake + disc_loss_real) * 0.5
+                    batch["disc_loss"] = self.criterion_disc(disc_fake, disc_real, batch)
 
                     # Explicitly delete intermediate tensors
-                    del disc_fake, disc_real, disc_loss_fake, disc_loss_real
+                    del disc_fake, disc_real
                     torch.cuda.empty_cache()
 
                     # Scale and backward
@@ -84,14 +82,9 @@ class Trainer(BaseTrainer):
                     disc_fake = self.model_disc(batch["gen_output"])
 
                 # Calculate generator losses
-                batch["gen_loss"] = self.criterion_gen(disc_fake, True)
+                batch["gen_loss"] = self.criterion_gen(disc_fake, batch)
                 del disc_fake
                 torch.cuda.empty_cache()
-
-                # Add content loss
-                content_loss = torch.nn.functional.l1_loss(batch["gen_output"], batch["data_object"])
-                batch["gen_loss"] += self.content_weight * content_loss
-                del content_loss
 
                 # Scale and backward
                 scaled_gen_loss = batch["gen_loss"] / self.gradient_accumulation_steps
@@ -105,9 +98,6 @@ class Trainer(BaseTrainer):
 
                 self.current_accumulation_step = (self.current_accumulation_step + 1) % self.gradient_accumulation_steps
 
-                # Combine losses for logging
-                batch["loss"] = batch["gen_loss"] + batch["disc_loss"]
-
             else:
                 # Inference mode
                 with torch.no_grad():
@@ -117,17 +107,11 @@ class Trainer(BaseTrainer):
                     disc_fake = self.model_disc(batch["gen_output"])
                     disc_real = self.model_disc(batch["data_object"])
 
-                    batch["disc_loss"] = self.criterion_disc(disc_fake, False) + self.criterion_disc(disc_real, True)
-                    batch["gen_loss"] = self.criterion_gen(disc_fake, True)
+                    batch["disc_loss"] = self.criterion_disc(disc_fake, disc_real, batch)
+                    batch["gen_loss"] = self.criterion_gen(disc_fake, batch)
 
                     del disc_fake, disc_real
                     torch.cuda.empty_cache()
-
-                    content_loss = torch.nn.functional.l1_loss(batch["gen_output"], batch["data_object"])
-                    batch["gen_loss"] += self.content_weight * content_loss
-                    del content_loss
-
-                    batch["loss"] = batch["gen_loss"] + batch["disc_loss"]
 
             # Update metrics only for logging step
             if self.is_train and (self.current_accumulation_step + 1) % self.log_step == 0:
