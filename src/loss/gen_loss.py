@@ -33,8 +33,8 @@ class GeneratorCriterion(nn.Module):
 
         Args:
             disc_fake (torch.Tensor): Discriminator output for fake images
-            gen_output (torch.Tensor): Generator output images
-            target (torch.Tensor): Target/ground truth images
+            batch: batch[gen_output] (torch.Tensor): Generator output images
+            batch: batch[target] (torch.Tensor): Target/ground truth images
 
         Returns:
             torch.Tensor: Combined generator loss
