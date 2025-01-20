@@ -76,7 +76,7 @@ To set up the project, follow these steps:
 ## Dataset Creation
 
 The dataset for training, validation, and testing was created from anime series listed below. Each video file was split into frames, after which low-quality images and duplicates were removed.
-You can create your own dataset, follow the [instruction](inference_video/README.md).
+You can create your own dataset, follow the [instruction](dataset_preparation/README.md).
 
 ### Anime Used for Dataset Creation
 
