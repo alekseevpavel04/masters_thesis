@@ -1,3 +1,9 @@
+'''
+Degradation method from APISR
+https://github.com/Kiteretsu77/APISR/
+'''
+
+
 import cv2
 import torch
 import random
@@ -5,7 +11,7 @@ import math
 import numpy as np
 from torch.nn import functional as F
 
-class ImageDegradationPipeline:
+class ImageDegradationPipeline_APISR:
     def __init__(
         self,
         gaussian_noise_prob=0.5,

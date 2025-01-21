@@ -6,7 +6,7 @@ defaults:
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train
+  - degradation: train_base
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
@@ -28,8 +28,8 @@ loss_function_disc:
   _target_: src.loss.DiscriminatorCriterion
 
 trainer:
-  log_step: 10
-  n_epochs: 2
+  log_step: 20
+  n_epochs: 10
   epoch_len: 20
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)

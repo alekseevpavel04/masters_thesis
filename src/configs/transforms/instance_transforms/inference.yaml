@@ -4,4 +4,4 @@ train:
     transforms:
       - _target_: src.transforms.img_augs.CentralCrop
         target_width: 512
-        target_height: 288
+        target_height: 512

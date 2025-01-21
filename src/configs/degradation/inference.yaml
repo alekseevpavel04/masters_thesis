@@ -1,4 +1,4 @@
-_target_: src.degradation.ImageDegradationPipeline
+_target_: src.degradation.ImageDegradationPipeline_APISR
 gaussian_noise_prob: 0.5
 noise_range: [0.01, 0.1]
 kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
