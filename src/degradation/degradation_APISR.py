@@ -22,9 +22,6 @@ warnings.filterwarnings("ignore")
 
 # Define the opt dictionary with necessary configurations
 opt = {
-    'CUDA_VISIBLE_DEVICES': '0',
-    'parallel_num': 4,
-    'hr_size': 256,
     'scale': 2,
     'resize_prob': [0.2, 0.7, 0.1],
     'resize_range': [0.5, 1.2],
@@ -55,15 +52,11 @@ opt = {
     'second_blur_prob': 0.8,
     'compression_codec1': ['jpeg', 'webp'],
     'compression_codec_prob1': [0.85, 0.15],
-    'compression_codec2': ['jpeg', 'webp', 'h264', 'h265', 'mpeg2', 'mpeg4'],
-    'compression_codec_prob2': [0.6, 0.1, 0.1, 0.1, 0.05, 0.05],
+    'compression_codec2': ['jpeg', 'webp'],
+    'compression_codec_prob2': [0.85, 0.15],
     'jpeg_quality_range1': [30, 95],
-    'jpeg_quality_range2': [30, 95],
-    'uncropped_hr': 'datasets/HR',
-    'lr_dataset_path': 'datasets/LR'
+    'jpeg_quality_range2': [30, 95]
 }
-
-os.environ['CUDA_VISIBLE_DEVICES'] = opt['CUDA_VISIBLE_DEVICES']
 
 # Utility functions
 def np2tensor(np_frame):
@@ -442,9 +435,9 @@ def common_degradation(out, opt, kernels, process_id, verbose=False):
     # Choose an image compression codec (All degradation batch use the same codec)
     image_codec = random.choices(opt['compression_codec1'], opt['compression_codec_prob1'])[0]
     if image_codec == "jpeg":
-        out = JPEG.compress_tensor(out)
+        out = JPEG.compress_tensor(out, opt['jpeg_quality_range1'])
     elif image_codec == "webp":
-        out = WEBP.compress_tensor(out)  # Убрали лишний аргумент idx
+        out = WEBP.compress_tensor(out)
     else:
         raise NotImplementedError("We don't have such image compression designed!")
 
@@ -478,16 +471,25 @@ def common_degradation(out, opt, kernels, process_id, verbose=False):
     if downsample_2nd_position == 2:
         out = downsample_2nd(out, opt, ori_h, ori_w)
 
+    # Choose an image compression codec (All degradation batch use the same codec)
+    image_codec = random.choices(opt['compression_codec2'], opt['compression_codec_prob2'])[0]
+    if image_codec == "jpeg":
+        out = JPEG.compress_tensor(out, opt['jpeg_quality_range2'])
+    elif image_codec == "webp":
+        out = WEBP.compress_tensor(out)
+    else:
+        raise NotImplementedError("We don't have such image compression designed!")
+
     return out
 
 
 class JPEG:
     @staticmethod
-    def compress_tensor(tensor_frames):
+    def compress_tensor(tensor_frames, quality_range):
         single_frame = tensor2np(tensor_frames)
         # Convert to CV_8U explicitly
         single_frame = (single_frame * 255).astype(np.uint8)
-        jpeg_quality = random.randint(30, 95)
+        jpeg_quality = random.randint(*quality_range)
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
         _, encimg = cv2.imencode('.jpg', single_frame, encode_param)
         decimg = cv2.imdecode(encimg, 1)
@@ -506,47 +508,6 @@ class WEBP:
         decimg = cv2.imdecode(encimg, 1)
         result = np2tensor(decimg)
         return result
-
-class H264:
-    def __init__(self):
-        pass
-
-    def compress_and_store(self, np_frames, store_path, idx):
-        fourcc = cv2.VideoWriter_fourcc(*'H264')
-        out = cv2.VideoWriter(store_path, fourcc, 30, (np_frames.shape[1], np_frames.shape[0]))
-        out.write(np_frames)
-        out.release()
-
-class H265:
-    def __init__(self):
-        pass
-
-    def compress_and_store(self, np_frames, store_path, idx):
-        fourcc = cv2.VideoWriter_fourcc(*'H265')
-        out = cv2.VideoWriter(store_path, fourcc, 30, (np_frames.shape[1], np_frames.shape[0]))
-        out.write(np_frames)
-        out.release()
-
-class MPEG2:
-    def __init__(self):
-        pass
-
-    def compress_and_store(self, np_frames, store_path, idx):
-        fourcc = cv2.VideoWriter_fourcc(*'MPEG')
-        out = cv2.VideoWriter(store_path, fourcc, 30, (np_frames.shape[1], np_frames.shape[0]))
-        out.write(np_frames)
-        out.release()
-
-class MPEG4:
-    def __init__(self):
-        pass
-
-    def compress_and_store(self, np_frames, store_path, idx):
-        fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-        out = cv2.VideoWriter(store_path, fourcc, 30, (np_frames.shape[1], np_frames.shape[0]))
-        out.write(np_frames)
-        out.release()
-
 
 class degradation_v1:
     def __init__(self):

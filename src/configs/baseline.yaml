@@ -6,7 +6,7 @@ defaults:
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train_RealESRGAN
+  - degradation: train_APISR
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
