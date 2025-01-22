@@ -1,2 +1,44 @@
 _target_: src.degradation.ImageDegradationPipeline_APISR
-mode: "batch"
+mode: 'batch'
+scale: 2
+
+resize_options: ['area', 'bilinear', 'bicubic']
+
+resize_prob: [0.2, 0.7, 0.1]
+resize_range: [0.1, 1.2]
+gaussian_noise_prob: 0.5
+noise_range: [1, 30]
+poisson_scale_range: [0.05, 3.0]
+gray_noise_prob: 0.4
+
+second_blur_prob: 0.8
+resize_prob2: [0.2, 0.7, 0.1]
+resize_range2: [0.15, 1.2]
+gaussian_noise_prob2: 0.5
+noise_range2: [1, 25]
+poisson_scale_range2: [0.05, 2.5]
+gray_noise_prob2: 0.4
+
+kernel_range: [3, 11]
+kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+sinc_prob: 0.1
+blur_sigma: [0.2, 3.0]
+betag_range: [0.5, 4.0]
+betap_range: [1, 2]
+
+kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+sinc_prob2: 0.1
+blur_sigma2: [0.2, 1.5]
+betag_range2: [0.5, 4.0]
+betap_range2: [1, 2]
+
+compression_codec1: ['jpeg', 'webp']
+compression_codec_prob1: [0.85, 0.15]
+jpeg_quality_range1: [20, 95]
+
+compression_codec2: ['jpeg', 'webp']
+compression_codec_prob2: [0.85, 0.15]
+jpeg_quality_range2: [20, 95]
+

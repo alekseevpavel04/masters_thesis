@@ -19,45 +19,6 @@ from torchvision.transforms.functional import rgb_to_grayscale
 
 warnings.filterwarnings("ignore")
 
-
-# Define the opt dictionary with necessary configurations
-opt = {
-    'scale': 2,
-    'resize_prob': [0.2, 0.7, 0.1],
-    'resize_range': [0.5, 1.2],
-    'resize_options': ['bilinear', 'nearest', 'bicubic'],
-    'resize_prob2': [0.2, 0.7, 0.1],
-    'resize_range2': [0.5, 1.2],
-    'kernel_range': [3, 11],
-    'sinc_prob': 0.1,
-    'kernel_list': ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
-    'kernel_prob': [0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
-    'blur_sigma': [0.2, 3.0],
-    'betag_range': [0.5, 4.0],
-    'betap_range': [0.5, 4.0],
-    'sinc_prob2': 0.1,
-    'kernel_list2': ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
-    'kernel_prob2': [0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
-    'blur_sigma2': [0.2, 3.0],
-    'betag_range2': [0.5, 4.0],
-    'betap_range2': [0.5, 4.0],
-    'gray_noise_prob': 0.4,
-    'gaussian_noise_prob': 0.5,
-    'noise_range': [1, 30],
-    'poisson_scale_range': [0.05, 3.0],
-    'gray_noise_prob2': 0.4,
-    'gaussian_noise_prob2': 0.5,
-    'noise_range2': [1, 30],
-    'poisson_scale_range2': [0.05, 3.0],
-    'second_blur_prob': 0.8,
-    'compression_codec1': ['jpeg', 'webp'],
-    'compression_codec_prob1': [0.85, 0.15],
-    'compression_codec2': ['jpeg', 'webp'],
-    'compression_codec_prob2': [0.85, 0.15],
-    'jpeg_quality_range1': [30, 95],
-    'jpeg_quality_range2': [30, 95]
-}
-
 # Utility functions
 def np2tensor(np_frame):
     return torch.from_numpy(np.transpose(np_frame, (2, 0, 1))).unsqueeze(0).cuda().float() / 255
@@ -488,7 +449,7 @@ class JPEG:
     def compress_tensor(tensor_frames, quality_range):
         single_frame = tensor2np(tensor_frames)
         # Convert to CV_8U explicitly
-        single_frame = (single_frame * 255).astype(np.uint8)
+        single_frame = (single_frame).astype(np.uint8)
         jpeg_quality = random.randint(*quality_range)
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
         _, encimg = cv2.imencode('.jpg', single_frame, encode_param)
@@ -517,10 +478,6 @@ class degradation_v1:
         # Init the compression instance
         self.jpeg_instance = JPEG()
         self.webp_instance = WEBP()
-        self.H264_instance = H264()
-        self.H265_instance = H265()
-        self.MPEG2_instance = MPEG2()
-        self.MPEG4_instance = MPEG4()
 
     def reset_kernels(self, opt):
         kernel1, kernel2 = generate_kernels(opt)
@@ -553,9 +510,96 @@ class degradation_v1:
         out = torch.clamp(out, 0, 1)
 
         return out
+
 class ImageDegradationPipeline_APISR:
-    def __init__(self, mode='batch'):
+    def __init__(
+        self,
+        mode='batch',
+        scale=2,
+        resize_options=['area', 'bilinear', 'bicubic'],
+        resize_prob=[0.2, 0.7, 0.1],
+        resize_range=[0.1, 1.2],
+        gaussian_noise_prob=0.5,
+        noise_range=[1, 30],
+        poisson_scale_range=[0.05, 3.0],
+        gray_noise_prob=0.4,
+        second_blur_prob=0.8,
+        resize_prob2=[0.2, 0.7, 0.1],
+        resize_range2=[0.15, 1.2],
+        gaussian_noise_prob2=0.5,
+        noise_range2=[1, 25],
+        poisson_scale_range2=[0.05, 2.5],
+        gray_noise_prob2=0.4,
+        kernel_range=[3, 11],
+        kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
+        kernel_prob=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
+        sinc_prob=0.1,
+        blur_sigma=[0.2, 3.0],
+        betag_range=[0.5, 4.0],
+        betap_range=[1, 2],
+        kernel_list2=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
+        kernel_prob2=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
+        sinc_prob2=0.1,
+        blur_sigma2=[0.2, 1.5],
+        betag_range2=[0.5, 4.0],
+        betap_range2=[1, 2],
+        compression_codec1=['jpeg', 'webp'],
+        compression_codec_prob1=[0.85, 0.15],
+        jpeg_quality_range1=[20, 95],
+        compression_codec2=['jpeg', 'webp'],
+        compression_codec_prob2=[0.85, 0.15],
+        jpeg_quality_range2=[20, 95]
+    ):
+        # Основные параметры
         self.mode = mode
+        self.scale = scale
+
+        # The first degradation process
+        self.resize_options = resize_options
+        self.resize_prob = resize_prob
+        self.resize_range = resize_range
+        self.gaussian_noise_prob = gaussian_noise_prob
+        self.noise_range = noise_range
+        self.poisson_scale_range = poisson_scale_range
+        self.gray_noise_prob = gray_noise_prob
+
+        # The second degradation process
+        self.second_blur_prob = second_blur_prob
+        self.resize_prob2 = resize_prob2
+        self.resize_range2 = resize_range2
+        self.gaussian_noise_prob2 = gaussian_noise_prob2
+        self.noise_range2 = noise_range2
+        self.poisson_scale_range2 = poisson_scale_range2
+        self.gray_noise_prob2 = gray_noise_prob2
+
+        # Blur kernel1
+        self.kernel_range = kernel_range
+        self.kernel_list = kernel_list
+        self.kernel_prob = kernel_prob
+        self.sinc_prob = sinc_prob
+        self.blur_sigma = blur_sigma
+        self.betag_range = betag_range
+        self.betap_range = betap_range
+
+        # Blur kernel2
+        self.kernel_list2 = kernel_list2
+        self.kernel_prob2 = kernel_prob2
+        self.sinc_prob2 = sinc_prob2
+        self.blur_sigma2 = blur_sigma2
+        self.betag_range2 = betag_range2
+        self.betap_range2 = betap_range2
+
+        # First image compression
+        self.compression_codec1 = compression_codec1
+        self.compression_codec_prob1 = compression_codec_prob1
+        self.jpeg_quality_range1 = jpeg_quality_range1
+
+        # Second image compression
+        self.compression_codec2 = compression_codec2
+        self.compression_codec_prob2 = compression_codec_prob2
+        self.jpeg_quality_range2 = jpeg_quality_range2
+
+        # Инициализация деградера
         self.degrader = degradation_v1()
 
     def process_batch(self, batch):
@@ -568,6 +612,44 @@ class ImageDegradationPipeline_APISR:
         Returns:
             torch.Tensor: Degraded batch of images with shape (B, C, H // scale, W // scale).
         """
+        # Создаем словарь opt, используя атрибуты класса
+        opt = {
+            'scale': self.scale,
+            'resize_options': self.resize_options,
+            'resize_prob': self.resize_prob,
+            'resize_range': self.resize_range,
+            'gaussian_noise_prob': self.gaussian_noise_prob,
+            'noise_range': self.noise_range,
+            'poisson_scale_range': self.poisson_scale_range,
+            'gray_noise_prob': self.gray_noise_prob,
+            'second_blur_prob': self.second_blur_prob,
+            'resize_prob2': self.resize_prob2,
+            'resize_range2': self.resize_range2,
+            'gaussian_noise_prob2': self.gaussian_noise_prob2,
+            'noise_range2': self.noise_range2,
+            'poisson_scale_range2': self.poisson_scale_range2,
+            'gray_noise_prob2': self.gray_noise_prob2,
+            'kernel_range': self.kernel_range,
+            'kernel_list': self.kernel_list,
+            'kernel_prob': self.kernel_prob,
+            'sinc_prob': self.sinc_prob,
+            'blur_sigma': self.blur_sigma,
+            'betag_range': self.betag_range,
+            'betap_range': self.betap_range,
+            'kernel_list2': self.kernel_list2,
+            'kernel_prob2': self.kernel_prob2,
+            'sinc_prob2': self.sinc_prob2,
+            'blur_sigma2': self.blur_sigma2,
+            'betag_range2': self.betag_range2,
+            'betap_range2': self.betap_range2,
+            'compression_codec1': self.compression_codec1,
+            'compression_codec_prob1': self.compression_codec_prob1,
+            'jpeg_quality_range1': self.jpeg_quality_range1,
+            'compression_codec2': self.compression_codec2,
+            'compression_codec_prob2': self.compression_codec_prob2,
+            'jpeg_quality_range2': self.jpeg_quality_range2
+        }
+
         opt_copy = copy.deepcopy(opt)
         self.degrader.reset_kernels(opt_copy)
 
