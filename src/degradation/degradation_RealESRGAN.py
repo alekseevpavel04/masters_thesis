@@ -10,7 +10,40 @@ import math
 
 
 class ImageDegradationPipeline_RealESRGAN:
-    def __init__(self, scale=2, device='cuda'):
+    def __init__(
+            self,
+            scale=2,
+            device='cuda',
+            kernel_list = ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
+            kernel_prob = [0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
+            blur_sigma = [0.2, 3],
+            betag_range = [0.5, 4],
+            betap_range = [1, 2],
+            sinc_prob = 0.1,
+            kernel_list2=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
+            kernel_prob2=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
+            blur_sigma2=[0.2, 1.5],
+            betag_range2=[0.5, 4],
+            betap_range2=[1, 2],
+            sinc_prob2=0.1,
+            resize_prob=[0.2, 0.7, 0.1],
+            resize_range=[0.15, 1.5],
+            gaussian_noise_prob=0.5,
+            noise_range=[1, 30],
+            poisson_scale_range=[0.05, 3],
+            gray_noise_prob=0.4,
+            jpeg_range=[30, 95],
+            resize_prob2=[0.3, 0.4, 0.3],
+            resize_range2=[0.3, 1.2],
+            gaussian_noise_prob2=0.5,
+            noise_range2=[1, 25],
+            poisson_scale_range2=[0.05, 2.5],
+            gray_noise_prob2=0.4,
+            jpeg_range2=[30, 95],
+            final_sinc_prob=0.8,
+            second_blur_prob=0.8
+
+    ):
         self.scale = scale
         self.device = device
 
@@ -24,39 +57,39 @@ class ImageDegradationPipeline_RealESRGAN:
         self.pulse_tensor[10, 10] = 1
 
         # First degradation parameters
-        self.kernel_list = ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        self.kernel_prob = [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        self.blur_sigma = [0.2, 3]
-        self.betag_range = [0.5, 4]
-        self.betap_range = [1, 2]
-        self.sinc_prob = 0.1
+        self.kernel_list = kernel_list
+        self.kernel_prob = kernel_prob
+        self.blur_sigma = blur_sigma
+        self.betag_range = betag_range
+        self.betap_range = betap_range
+        self.sinc_prob = sinc_prob
 
         # Second degradation parameters
-        self.kernel_list2 = ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
-        self.kernel_prob2 = [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-        self.blur_sigma2 = [0.2, 1.5]
-        self.betag_range2 = [0.5, 4]
-        self.betap_range2 = [1, 2]
-        self.sinc_prob2 = 0.1
+        self.kernel_list2 = kernel_list2
+        self.kernel_prob2 = kernel_prob2
+        self.blur_sigma2 = blur_sigma2
+        self.betag_range2 = betag_range2
+        self.betap_range2 = betap_range2
+        self.sinc_prob2 = sinc_prob2
 
         # Other parameters
-        self.resize_prob = [0.2, 0.7, 0.1]
-        self.resize_range = [0.15, 1.5]
-        self.gaussian_noise_prob = 0.5
-        self.noise_range = [1, 30]
-        self.poisson_scale_range = [0.05, 3]
-        self.gray_noise_prob = 0.4
-        self.jpeg_range = [30, 95]
+        self.resize_prob = resize_prob
+        self.resize_range = resize_range
+        self.gaussian_noise_prob = gaussian_noise_prob
+        self.noise_range = noise_range
+        self.poisson_scale_range = poisson_scale_range
+        self.gray_noise_prob = gray_noise_prob
+        self.jpeg_range = jpeg_range
 
-        self.resize_prob2 = [0.3, 0.4, 0.3]
-        self.resize_range2 = [0.3, 1.2]
-        self.gaussian_noise_prob2 = 0.5
-        self.noise_range2 = [1, 25]
-        self.poisson_scale_range2 = [0.05, 2.5]
-        self.gray_noise_prob2 = 0.4
-        self.jpeg_range2 = [30, 95]
-        self.final_sinc_prob = 0.8
-        self.second_blur_prob = 0.8
+        self.resize_prob2 = resize_prob2
+        self.resize_range2 = resize_range2
+        self.gaussian_noise_prob2 = gaussian_noise_prob2
+        self.noise_range2 = noise_range2
+        self.poisson_scale_range2 = poisson_scale_range2
+        self.gray_noise_prob2 = gray_noise_prob2
+        self.jpeg_range2 = jpeg_range2
+        self.final_sinc_prob = final_sinc_prob
+        self.second_blur_prob = second_blur_prob
 
     def generate_kernel1(self, batch_size):
         kernel_size = random.choice(self.kernel_range)
