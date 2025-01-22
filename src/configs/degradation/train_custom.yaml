@@ -1,0 +1,14 @@
+_target_: src.degradation.ImageDegradationPipeline_custom
+gaussian_noise_prob: 0.5
+noise_range: [0.01, 0.1]
+kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+kernel_range: [2, 4]
+blur_sigma: [0.1, 3]
+betag_range: [0.5, 4]
+betap_range: [1, 2]
+second_blur_prob: 0.3
+gaussian_noise_prob2: 0.3
+noise_range2: [0.01, 0.05]
+mode: "batch"
+device: "cuda"
