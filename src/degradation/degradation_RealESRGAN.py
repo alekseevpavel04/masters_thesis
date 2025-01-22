@@ -1,261 +1,244 @@
 import torch
-import numpy as np
-import cv2
-import math
 import random
-from torch.nn import functional as F
-from scipy import special
+import numpy as np
+import torch.nn.functional as F
+from basicsr.data.degradations import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
+from basicsr.utils import DiffJPEG, USMSharp
+from basicsr.utils.img_process_util import filter2D
+from basicsr.data.degradations import circular_lowpass_kernel, random_mixed_kernels
+import math
+
 
 class ImageDegradationPipeline_RealESRGAN:
-    def __init__(
-        self,
-        # First degradation settings
-        kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
-        kernel_prob=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
-        blur_sigma=[0.1, 10],
-        betag_range=[0.5, 4],
-        betap_range=[1, 2],
-        sinc_prob=0.1,
-        # Second degradation settings
-        second_blur_prob=0.3,
-        kernel_list2=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
-        kernel_prob2=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
-        blur_sigma2=[0.1, 3],
-        betag_range2=[0.5, 4],
-        betap_range2=[1, 2],
-        sinc_prob2=0.1,
-        # Final sinc settings
-        final_sinc_prob=0.2,
-        mode='single_image',
-        device="cpu"
-    ):
+    def __init__(self, scale=2, device='cuda'):
+        self.scale = scale
         self.device = device
-        self.mode = mode
 
-        # First degradation params
-        self.kernel_list = kernel_list
-        self.kernel_prob = kernel_prob
-        self.blur_sigma = blur_sigma
-        self.betag_range = betag_range
-        self.betap_range = betap_range
-        self.sinc_prob = sinc_prob
+        # Initialize components
+        self.jpeger = DiffJPEG(differentiable=True).to(device)  # Changed to differentiable
+        self.usm_sharpener = USMSharp().to(device)
 
-        # Second degradation params
-        self.second_blur_prob = second_blur_prob
-        self.kernel_list2 = kernel_list2
-        self.kernel_prob2 = kernel_prob2
-        self.blur_sigma2 = blur_sigma2
-        self.betag_range2 = betag_range2
-        self.betap_range2 = betap_range2
-        self.sinc_prob2 = sinc_prob2
-
-        # Final sinc params
-        self.final_sinc_prob = final_sinc_prob
-
-        # Kernel size range (7 to 21)
+        # Default parameters from RealESRGAN
         self.kernel_range = [2 * v + 1 for v in range(3, 11)]
-        self.pulse_tensor = torch.zeros(21, 21).float()
+        self.pulse_tensor = torch.zeros(21, 21).float().to(device)
         self.pulse_tensor[10, 10] = 1
 
-    def _generate_kernel(self, kernel_size, kernel_list, kernel_prob, blur_sigma,
-                         betag_range, betap_range, sinc_prob, batch_size=1):
-        """Generate a random kernel based on settings"""
-        if batch_size > 1:
-            # Для батча генерируем несколько ядер
-            kernels = []
-            for _ in range(batch_size):
-                kernel = self._generate_single_kernel(
-                    kernel_size, kernel_list, kernel_prob,
-                    blur_sigma, betag_range, betap_range, sinc_prob
-                )
-                kernels.append(kernel)
-            # Объединяем ядра в один тензор размера (batch_size, 21, 21)
-            return torch.stack(kernels, dim=0)
-        else:
-            # Для одного изображения генерируем одно ядро
-            return self._generate_single_kernel(
-                kernel_size, kernel_list, kernel_prob,
-                blur_sigma, betag_range, betap_range, sinc_prob
-            ).unsqueeze(0)
+        # First degradation parameters
+        self.kernel_list = ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        self.kernel_prob = [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        self.blur_sigma = [0.2, 3]
+        self.betag_range = [0.5, 4]
+        self.betap_range = [1, 2]
+        self.sinc_prob = 0.1
 
-    def _generate_single_kernel(self, kernel_size, kernel_list, kernel_prob, blur_sigma,
-                                betag_range, betap_range, sinc_prob):
-        """Generate a single kernel"""
-        if random.random() < sinc_prob:
+        # Second degradation parameters
+        self.kernel_list2 = ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+        self.kernel_prob2 = [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+        self.blur_sigma2 = [0.2, 1.5]
+        self.betag_range2 = [0.5, 4]
+        self.betap_range2 = [1, 2]
+        self.sinc_prob2 = 0.1
+
+        # Other parameters
+        self.resize_prob = [0.2, 0.7, 0.1]
+        self.resize_range = [0.15, 1.5]
+        self.gaussian_noise_prob = 0.5
+        self.noise_range = [1, 30]
+        self.poisson_scale_range = [0.05, 3]
+        self.gray_noise_prob = 0.4
+        self.jpeg_range = [30, 95]
+
+        self.resize_prob2 = [0.3, 0.4, 0.3]
+        self.resize_range2 = [0.3, 1.2]
+        self.gaussian_noise_prob2 = 0.5
+        self.noise_range2 = [1, 25]
+        self.poisson_scale_range2 = [0.05, 2.5]
+        self.gray_noise_prob2 = 0.4
+        self.jpeg_range2 = [30, 95]
+        self.final_sinc_prob = 0.8
+        self.second_blur_prob = 0.8
+
+    def generate_kernel1(self, batch_size):
+        kernel_size = random.choice(self.kernel_range)
+        if np.random.uniform() < self.sinc_prob:
             if kernel_size < 13:
-                omega_c = random.uniform(np.pi / 3, np.pi)
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
             else:
-                omega_c = random.uniform(np.pi / 5, np.pi)
-            kernel = self._circular_lowpass_kernel(omega_c, kernel_size)
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
         else:
-            sigma_x = random.uniform(blur_sigma[0], blur_sigma[1])
-            sigma_y = random.uniform(blur_sigma[0], blur_sigma[1])
-            rotation = random.uniform(-math.pi, math.pi)
-            beta_g = random.uniform(betag_range[0], betag_range[1])
-            beta_p = random.uniform(betap_range[0], betap_range[1])
+            kernel = random_mixed_kernels(
+                self.kernel_list,
+                self.kernel_prob,
+                kernel_size,
+                self.blur_sigma,
+                self.blur_sigma,
+                [-math.pi, math.pi],
+                self.betag_range,
+                self.betap_range,
+                noise_range=None)
 
-            kernel_type = random.choices(kernel_list, kernel_prob)[0]
-
-            if kernel_type == 'iso':
-                kernel = self._generate_isotropic_gaussian_kernel(kernel_size, sigma_x)
-            elif kernel_type == 'aniso':
-                kernel = self._generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-            elif kernel_type == 'generalized_iso':
-                kernel = self._generate_generalized_gaussian_kernel(kernel_size, sigma_x, beta_g)
-            elif kernel_type == 'generalized_aniso':
-                kernel = self._generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-            elif kernel_type == 'plateau_iso':
-                kernel = self._generate_plateau_gaussian_kernel(kernel_size, sigma_x, beta_p)
-            elif kernel_type == 'plateau_aniso':
-                kernel = self._generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-
-        # Pad kernel to 21x21
         pad_size = (21 - kernel_size) // 2
         kernel = np.pad(kernel, ((pad_size, pad_size), (pad_size, pad_size)))
-        return torch.FloatTensor(kernel / np.sum(kernel)).to(self.device)
+        kernel = torch.FloatTensor(kernel).to(self.device)
+        return kernel.unsqueeze(0).repeat(batch_size, 1, 1)
 
-    def _process_tensor(self, tensor):
-        """Process input tensor with RealESRGAN degradation pipeline"""
-        tensor = tensor.to(self.device)
-        batch_size = tensor.size(0)
-
-        # First degradation
+    def generate_kernel2(self, batch_size):
         kernel_size = random.choice(self.kernel_range)
-        kernel1 = self._generate_kernel(
-            kernel_size, self.kernel_list, self.kernel_prob,
-            self.blur_sigma, self.betag_range, self.betap_range,
-            self.sinc_prob, batch_size=batch_size
-        )
-
-        out = tensor
-        # Apply first degradation
-        out = F.interpolate(out, scale_factor=0.5, mode='bicubic', align_corners=False)
-        out = self.filter2D(out, kernel1)
-
-        # Second degradation (optional)
-        if random.random() < self.second_blur_prob:
-            kernel_size2 = random.choice(self.kernel_range)
-            kernel2 = self._generate_kernel(
-                kernel_size2, self.kernel_list2, self.kernel_prob2,
-                self.blur_sigma2, self.betag_range2, self.betap_range2,
-                self.sinc_prob2, batch_size=batch_size
-            )
-            out = self.filter2D(out, kernel2)
-
-        # Final sinc degradation (optional)
-        if random.random() < self.final_sinc_prob:
-            kernel_size = random.choice(self.kernel_range)
-            omega_c = random.uniform(np.pi / 3, np.pi)
-            final_kernel = self._circular_lowpass_kernel(omega_c, kernel_size)
-            pad_size = (21 - kernel_size) // 2
-            final_kernel = np.pad(final_kernel, ((pad_size, pad_size), (pad_size, pad_size)))
-            final_kernel = torch.FloatTensor(final_kernel).to(self.device)
-            final_kernel = final_kernel.expand(batch_size, -1, -1)  # Расширяем до размера батча
-            out = self.filter2D(out, final_kernel)
-
-        return torch.clamp(out, 0, 1)
-
-    def filter2D(self, img, kernel):
-        """Apply 2D filter to image with proper batch handling"""
-        b, c, h, w = img.size()
-        k = kernel.size(-1)
-
-        # Проверяем, что ядро нечетного размера
-        if k % 2 == 1:
-            img = F.pad(img, (k // 2, k // 2, k // 2, k // 2), mode='reflect')
+        if np.random.uniform() < self.sinc_prob2:
+            if kernel_size < 13:
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
+            else:
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel2 = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
         else:
-            raise ValueError('Kernel size must be odd')
+            kernel2 = random_mixed_kernels(
+                self.kernel_list2,
+                self.kernel_prob2,
+                kernel_size,
+                self.blur_sigma2,
+                self.blur_sigma2,
+                [-math.pi, math.pi],
+                self.betag_range2,
+                self.betap_range2,
+                noise_range=None)
 
-        ph, pw = img.size()[-2:]
+        pad_size = (21 - kernel_size) // 2
+        kernel2 = np.pad(kernel2, ((pad_size, pad_size), (pad_size, pad_size)))
+        kernel2 = torch.FloatTensor(kernel2).to(self.device)
+        return kernel2.unsqueeze(0).repeat(batch_size, 1, 1)
 
-        # Преобразуем изображение и ядро для batch conv2d
-        img = img.reshape(1, b * c, ph, pw)
+    def generate_sinc_kernel(self, batch_size):
+        if np.random.uniform() < self.final_sinc_prob:
+            kernel_size = random.choice(self.kernel_range)
+            omega_c = np.random.uniform(np.pi / 3, np.pi)
+            sinc_kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=21)
+            sinc_kernel = torch.FloatTensor(sinc_kernel).to(self.device)
+        else:
+            sinc_kernel = self.pulse_tensor.clone()  # Use clone instead of direct assignment
+        return sinc_kernel.unsqueeze(0).repeat(batch_size, 1, 1)
 
-        # Расширяем ядро для каждого канала в батче
-        if len(kernel.size()) == 3:  # если ядро размера (b, k, k)
-            kernel = kernel.unsqueeze(1).repeat(1, c, 1, 1)  # -> (b, c, k, k)
-            kernel = kernel.reshape(b * c, 1, k, k)
-        else:  # если ядро размера (k, k)
-            kernel = kernel.unsqueeze(0).unsqueeze(0).repeat(b * c, 1, 1, 1)
+    def process_batch(self, gt_batch):
+        batch_size = gt_batch.size(0)
+        gt = gt_batch
+        gt_usm = self.usm_sharpener(gt)
 
-        # Применяем свертку
-        out = F.conv2d(img, kernel, groups=b * c)
+        # Generate kernels with proper batch size
+        kernel1 = self.generate_kernel1(batch_size)
+        kernel2 = self.generate_kernel2(batch_size)
+        sinc_kernel = self.generate_sinc_kernel(batch_size)
 
-        # Возвращаем к исходной форме
-        out = out.reshape(b, c, h, w)
+        ori_h, ori_w = gt.size()[2:4]
 
-        return out
+        # ----------------------- The first degradation process ----------------------- #
+        # blur
+        out = torch.zeros_like(gt_usm)
+        for i in range(batch_size):
+            out[i] = filter2D(gt_usm[i:i + 1], kernel1[i:i + 1])
 
-    def _circular_lowpass_kernel(self, omega_c, kernel_size):
-        """Generate sinc kernel"""
-        v = np.arange(-(kernel_size - 1) // 2, (kernel_size + 1) // 2)
-        x, y = np.meshgrid(v, v)
-        r = np.sqrt(x ** 2 + y ** 2)
-        kernel = omega_c * special.j1(omega_c * r) / (2 * np.pi * r)
-        kernel[r == 0] = omega_c ** 2 / (4 * np.pi)
-        kernel = kernel / np.sum(kernel)
-        return kernel
+        # random resize
+        updown_type = random.choices(['up', 'down', 'keep'], self.resize_prob)[0]
+        if updown_type == 'up':
+            scale = np.random.uniform(1, self.resize_range[1])
+        elif updown_type == 'down':
+            scale = np.random.uniform(self.resize_range[0], 1)
+        else:
+            scale = 1
+        mode = random.choice(['area', 'bilinear', 'bicubic'])
+        out = F.interpolate(out, scale_factor=scale, mode=mode)
 
-    def _generate_isotropic_gaussian_kernel(self, kernel_size, sigma):
-        """Generate isotropic Gaussian kernel"""
-        center = kernel_size // 2
-        x = np.arange(kernel_size) - center
-        x_2d, y_2d = np.meshgrid(x, x)
-        kernel = np.exp(-(x_2d ** 2 + y_2d ** 2) / (2 * sigma ** 2))
-        return kernel
+        # add noise
+        if np.random.uniform() < self.gaussian_noise_prob:
+            out = random_add_gaussian_noise_pt(
+                out, sigma_range=self.noise_range, clip=True, rounds=False, gray_prob=self.gray_noise_prob)
+        else:
+            out = random_add_poisson_noise_pt(
+                out,
+                scale_range=self.poisson_scale_range,
+                gray_prob=self.gray_noise_prob,
+                clip=True,
+                rounds=False)
 
-    def _generate_anisotropic_gaussian_kernel(self, kernel_size, sigma_x, sigma_y, rotation):
-        """Generate anisotropic Gaussian kernel"""
-        center = kernel_size // 2
-        x = np.arange(kernel_size) - center
-        x_2d, y_2d = np.meshgrid(x, x)
+        # JPEG compression
+        jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range)
+        out = torch.clamp(out, 0, 1)  # Use new tensor
+        out = self.jpeger(out, quality=jpeg_p)
 
-        x_rot = x_2d * np.cos(rotation) - y_2d * np.sin(rotation)
-        y_rot = x_2d * np.sin(rotation) + y_2d * np.cos(rotation)
+        # ----------------------- The second degradation process ----------------------- #
+        # blur
+        if np.random.uniform() < self.second_blur_prob:
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], kernel2[i:i + 1])
+            out = temp_out
 
-        kernel = np.exp(-(x_rot ** 2 / (2 * sigma_x ** 2) + y_rot ** 2 / (2 * sigma_y ** 2)))
-        return kernel
+        # random resize
+        updown_type = random.choices(['up', 'down', 'keep'], self.resize_prob2)[0]
+        if updown_type == 'up':
+            scale = np.random.uniform(1, self.resize_range2[1])
+        elif updown_type == 'down':
+            scale = np.random.uniform(self.resize_range2[0], 1)
+        else:
+            scale = 1
+        mode = random.choice(['area', 'bilinear', 'bicubic'])
+        out = F.interpolate(
+            out, size=(int(ori_h / self.scale * scale), int(ori_w / self.scale * scale)), mode=mode)
 
-    def _generate_generalized_gaussian_kernel(self, kernel_size, sigma, beta):
-        """Generate generalized Gaussian kernel"""
-        center = kernel_size // 2
-        x = np.arange(kernel_size) - center
-        x_2d, y_2d = np.meshgrid(x, x)
-        kernel = np.exp(-((x_2d ** 2 + y_2d ** 2) / (2 * sigma ** 2)) ** beta)
-        return kernel
+        # add noise
+        if np.random.uniform() < self.gaussian_noise_prob2:
+            out = random_add_gaussian_noise_pt(
+                out, sigma_range=self.noise_range2, clip=True, rounds=False, gray_prob=self.gray_noise_prob2)
+        else:
+            out = random_add_poisson_noise_pt(
+                out,
+                scale_range=self.poisson_scale_range2,
+                gray_prob=self.gray_noise_prob2,
+                clip=True,
+                rounds=False)
 
-    def _generate_plateau_gaussian_kernel(self, kernel_size, sigma, beta):
-        """Generate plateau-shaped Gaussian kernel"""
-        center = kernel_size // 2
-        x = np.arange(kernel_size) - center
-        x_2d, y_2d = np.meshgrid(x, x)
-        r = np.sqrt(x_2d ** 2 + y_2d ** 2)
-        kernel = 1 / (1 + (r / sigma) ** beta)
-        return kernel
+        # JPEG compression + the final sinc filter
+        if np.random.uniform() < 0.5:
+            # resize back + the final sinc filter
+            mode = random.choice(['area', 'bilinear', 'bicubic'])
+            out = F.interpolate(out, size=(ori_h // self.scale, ori_w // self.scale), mode=mode)
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], sinc_kernel[i:i + 1])
+            out = temp_out
+            # JPEG compression
+            jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
+            out = torch.clamp(out, 0, 1)
+            out = self.jpeger(out, quality=jpeg_p)
+        else:
+            # JPEG compression
+            jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
+            out = torch.clamp(out, 0, 1)
+            out = self.jpeger(out, quality=jpeg_p)
+            # resize back + the final sinc filter
+            mode = random.choice(['area', 'bilinear', 'bicubic'])
+            out = F.interpolate(out, size=(ori_h // self.scale, ori_w // self.scale), mode=mode)
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], sinc_kernel[i:i + 1])
+            out = temp_out
+
+        # clamp and round
+        out = torch.clamp(out, 0, 1)
+        lq = torch.clamp((out * 255.0).round(), 0, 255) / 255.
+
+        return lq
 
 
-    def process_batch(self, hr_batch):
-        """Process batch of images"""
-        if not isinstance(hr_batch, torch.Tensor):
-            hr_batch = torch.tensor(hr_batch, device=self.device)
-        elif hr_batch.device != self.device:
-            hr_batch = hr_batch.to(self.device)
+def main():
+    # Example usage for batch processing
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    degrader_batch = ImageDegradationPipeline_RealESRGAN(scale=2, device=device)
 
-        if self.mode != 'batch':
-            raise ValueError("Degrader must be initialized with mode='batch' for batch processing")
-        return self._process_tensor(hr_batch)
+    # Create a random batch for demonstration
+    dummy_batch = torch.rand(4, 3, 256, 256).to(device)  # batch_size=4, channels=3, height=256, width=256
+    lr_batch = degrader_batch.process_batch(dummy_batch)
+    print(f"Processed batch shape: {lr_batch.shape}")
 
-    def degrade_image(self, input_path, output_path):
-        """Process single image from file"""
-        if self.mode != 'single_image':
-            raise ValueError("This method is only for single image processing. Use process_batch for batches.")
 
-        img = cv2.imread(input_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_t = torch.from_numpy(np.transpose(img, (2, 0, 1))).unsqueeze(0).float() / 255
-
-        out = self._process_tensor(img_t)
-
-        out_np = (np.transpose(out.detach().squeeze(0).cpu().numpy(), (1, 2, 0)) * 255).astype(np.uint8)
-        out_np = cv2.cvtColor(out_np, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(output_path, out_np)
+if __name__ == '__main__':
+    main()

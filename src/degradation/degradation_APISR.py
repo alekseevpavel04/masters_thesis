@@ -247,11 +247,11 @@ def generate_plateau_gaussian_kernel(kernel_size, sigma_x, beta):
 
 def main():
     # Example usage for single image
-    degrader_single = ImageDegrader(mode='single_image')
+    degrader_single = ImageDegradationPipeline_APISR(mode='single_image')
     degrader_single.degrade_image('input_images/input.png', 'output_images/degraded.png')
     
     # Example usage for batch processing
-    degrader_batch = ImageDegrader(mode='batch')
+    degrader_batch = ImageDegradationPipeline_APISR(mode='batch')
     # Создаем случайный батч для демонстрации
     dummy_batch = torch.rand(4, 3, 256, 256)  # batch_size=4, channels=3, height=256, width=256
     lr_batch = degrader_batch.process_batch(dummy_batch)
