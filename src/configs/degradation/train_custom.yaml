@@ -1,14 +1,51 @@
 _target_: src.degradation.ImageDegradationPipeline_custom
-gaussian_noise_prob: 0.5
-noise_range: [0.01, 0.1]
+device: "cuda"
+scale: 2
+
+
+intermittent_edges_prob: 0.5
+rainbow_effects_prob: 0.5
+rainbow_effects_edge_threshold: [50, 150]
+rainbow_effects_channel_shift: [10, 30]
+intermittent_edges_canny_thresholds: [30, 100]
+intermittent_edges_length_range: [2, 5]
+intermittent_edges_color_shift_range: [-20, 20]
 kernel_list: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
 kernel_prob: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
-kernel_range: [2, 4]
-blur_sigma: [0.1, 3]
+sinc_prob: 0.5
+blur_sigma: [0.2, 3]
 betag_range: [0.5, 4]
 betap_range: [1, 2]
-second_blur_prob: 0.3
-gaussian_noise_prob2: 0.3
-noise_range2: [0.01, 0.05]
-mode: "batch"
-device: "cuda"
+
+intermittent_edges_prob2: 0.5
+rainbow_effects_prob2: 0.5
+rainbow_effects_edge_threshold2: [50, 150]
+rainbow_effects_channel_shift2: [10, 30]
+intermittent_edges_canny_thresholds2: [30, 100]
+intermittent_edges_length_range2: [2, 5]
+intermittent_edges_color_shift_range2: [-20, 20]
+kernel_list2: ['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso']
+kernel_prob2: [0.45, 0.25, 0.12, 0.03, 0.12, 0.03]
+sinc_prob2: 0.5
+blur_sigma2: [0.2, 1.5]
+betag_range2: [0.5, 4]
+betap_range2: [1, 2]
+
+resize_prob: [0.2, 0.7, 0.1]
+resize_range: [0.15, 1.5]
+gaussian_noise_prob: 0.5
+noise_range: [1, 30]
+poisson_scale_range: [0.05, 3]
+gray_noise_prob: 0.4
+jpeg_range: [30, 95]
+
+second_blur_prob: 0.8
+resize_prob2: [0.3, 0.4, 0.3]
+resize_range2: [0.3, 1.2]
+gaussian_noise_prob2: 0.5
+noise_range2: [1, 25]
+poisson_scale_range2: [0.05, 2.5]
+gray_noise_prob2: 0.4
+jpeg_range2: [30, 95]
+
+final_sinc_prob: 1

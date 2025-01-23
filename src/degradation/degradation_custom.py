@@ -1,263 +1,410 @@
-'''
-Degradation method from APISR
-https://github.com/Kiteretsu77/APISR/
-'''
-
-import cv2
 import torch
 import random
-import math
 import numpy as np
-from torch.nn import functional as F
+import torch.nn.functional as F
+from basicsr.data.degradations import random_add_gaussian_noise_pt, random_add_poisson_noise_pt
+from basicsr.utils import DiffJPEG, USMSharp
+from basicsr.utils.img_process_util import filter2D
+from basicsr.data.degradations import circular_lowpass_kernel, random_mixed_kernels
+import math
+import cv2
 
 
 class ImageDegradationPipeline_custom:
     def __init__(
             self,
-            gaussian_noise_prob=0.5,
-            noise_range=[0.01, 0.1],
-            kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso',
-                         'plateau_iso', 'plateau_aniso'],
+            scale=2,
+            device='cuda',
+            kernel_list=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
             kernel_prob=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
-            kernel_range=[2, 4],
-            blur_sigma=[0.1, 3],
+            blur_sigma=[0.2, 3],
             betag_range=[0.5, 4],
             betap_range=[1, 2],
-            second_blur_prob=0.3,
-            gaussian_noise_prob2=0.3,
-            noise_range2=[0.01, 0.05],
-            mode='single_image',
-            device="cpu"
+            sinc_prob=0.1,
+            kernel_list2=['iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso'],
+            kernel_prob2=[0.45, 0.25, 0.12, 0.03, 0.12, 0.03],
+            blur_sigma2=[0.2, 1.5],
+            betag_range2=[0.5, 4],
+            betap_range2=[1, 2],
+            sinc_prob2=0.1,
+            resize_prob=[0.2, 0.7, 0.1],
+            resize_range=[0.15, 1.5],
+            gaussian_noise_prob=0.5,
+            noise_range=[1, 30],
+            poisson_scale_range=[0.05, 3],
+            gray_noise_prob=0.4,
+            jpeg_range=[30, 95],
+            resize_prob2=[0.3, 0.4, 0.3],
+            resize_range2=[0.3, 1.2],
+            gaussian_noise_prob2=0.5,
+            noise_range2=[1, 25],
+            poisson_scale_range2=[0.05, 2.5],
+            gray_noise_prob2=0.4,
+            jpeg_range2=[30, 95],
+            final_sinc_prob=1,
+            second_blur_prob=0.8,
+            intermittent_edges_prob=0.5,
+            rainbow_effects_prob=0.5,
+            intermittent_edges_prob2=0.5,
+            rainbow_effects_prob2=0.5,
+            rainbow_effects_edge_threshold =[10, 40],
+            rainbow_effects_channel_shift =[20, 50],
+            rainbow_effects_edge_threshold2=[10, 40],
+            rainbow_effects_channel_shift2=[20, 50],
+            intermittent_edges_canny_thresholds=[50, 150],
+            intermittent_edges_length_range=[1, 3],
+            intermittent_edges_color_shift_range=[-10, 10],
+            intermittent_edges_canny_thresholds2=[50, 150],
+            intermittent_edges_length_range2=[1, 3],
+            intermittent_edges_color_shift_range2=[-10, 10],
     ):
+        self.scale = scale
         self.device = device
-        self.gaussian_noise_prob = gaussian_noise_prob
-        self.noise_range = noise_range
+
+        # Initialize components
+        self.jpeger = DiffJPEG(differentiable=True).to(device)
+        self.usm_sharpener = USMSharp().to(device)
+
+        # Default parameters from RealESRGAN
+        self.kernel_range = [2 * v + 1 for v in range(3, 11)]
+        self.pulse_tensor = torch.zeros(21, 21).float().to(device)
+        self.pulse_tensor[10, 10] = 1
+
+        # First degradation parameters
+        self.intermittent_edges_prob = intermittent_edges_prob
+        self.rainbow_effects_prob = rainbow_effects_prob
+        self.rainbow_effects_edge_threshold = rainbow_effects_edge_threshold
+        self.rainbow_effects_channel_shift = rainbow_effects_channel_shift
+        self.intermittent_edges_canny_thresholds = intermittent_edges_canny_thresholds
+        self.intermittent_edges_length_range = intermittent_edges_length_range
+        self.intermittent_edges_color_shift_range = intermittent_edges_color_shift_range
         self.kernel_list = kernel_list
         self.kernel_prob = kernel_prob
-        self.kernel_range = kernel_range
         self.blur_sigma = blur_sigma
         self.betag_range = betag_range
         self.betap_range = betap_range
-        self.second_blur_prob = second_blur_prob
+        self.sinc_prob = sinc_prob
+
+        # Second degradation parameters
+        self.intermittent_edges_prob2 = intermittent_edges_prob2
+        self.rainbow_effects_prob2 = rainbow_effects_prob2
+        self.rainbow_effects_edge_threshold2 = rainbow_effects_edge_threshold2
+        self.rainbow_effects_channel_shift2 = rainbow_effects_channel_shift2
+        self.intermittent_edges_canny_thresholds2 = intermittent_edges_canny_thresholds2
+        self.intermittent_edges_length_range2 = intermittent_edges_length_range2
+        self.intermittent_edges_color_shift_range2 = intermittent_edges_color_shift_range2
+        self.kernel_list2 = kernel_list2
+        self.kernel_prob2 = kernel_prob2
+        self.blur_sigma2 = blur_sigma2
+        self.betag_range2 = betag_range2
+        self.betap_range2 = betap_range2
+        self.sinc_prob2 = sinc_prob2
+
+
+        # Other parameters
+        self.resize_prob = resize_prob
+        self.resize_range = resize_range
+        self.gaussian_noise_prob = gaussian_noise_prob
+        self.noise_range = noise_range
+        self.poisson_scale_range = poisson_scale_range
+        self.gray_noise_prob = gray_noise_prob
+        self.jpeg_range = jpeg_range
+
+        self.resize_prob2 = resize_prob2
+        self.resize_range2 = resize_range2
         self.gaussian_noise_prob2 = gaussian_noise_prob2
         self.noise_range2 = noise_range2
-        self.mode = mode
+        self.poisson_scale_range2 = poisson_scale_range2
+        self.gray_noise_prob2 = gray_noise_prob2
+        self.jpeg_range2 = jpeg_range2
+        self.final_sinc_prob = final_sinc_prob
+        self.second_blur_prob = second_blur_prob
 
-    def _generate_kernel_parameters(self):
-        """Generate random parameters for kernel generation"""
-        kernel_size = random.choice(range(
-            self.kernel_range[0] * 2 + 1,
-            self.kernel_range[1] * 2 + 1, 2
-        ))
-        sigma_x = random.uniform(self.blur_sigma[0], self.blur_sigma[1])
-        sigma_y = random.uniform(self.blur_sigma[0], self.blur_sigma[1])
-        rotation = random.uniform(-math.pi, math.pi)
-        beta_g = random.uniform(self.betag_range[0], self.betag_range[1])
-        beta_p = random.uniform(self.betap_range[0], self.betap_range[1])
 
-        return kernel_size, sigma_x, sigma_y, rotation, beta_g, beta_p
 
-    def _generate_single_kernel(self, kernel_size=None):
-        """Generate a single kernel with optional fixed size"""
-        if kernel_size is None:
-            kernel_size, sigma_x, sigma_y, rotation, beta_g, beta_p = self._generate_kernel_parameters()
+    def generate_kernel1(self, batch_size):
+        kernel_size = random.choice(self.kernel_range)
+        if np.random.uniform() < self.sinc_prob:
+            if kernel_size < 13:
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
+            else:
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
         else:
-            _, sigma_x, sigma_y, rotation, beta_g, beta_p = self._generate_kernel_parameters()
+            kernel = random_mixed_kernels(
+                self.kernel_list,
+                self.kernel_prob,
+                kernel_size,
+                self.blur_sigma,
+                self.blur_sigma,
+                [-math.pi, math.pi],
+                self.betag_range,
+                self.betap_range,
+                noise_range=None)
 
-        kernel_type = random.choices(self.kernel_list, self.kernel_prob)[0]
+        pad_size = (21 - kernel_size) // 2
+        kernel = np.pad(kernel, ((pad_size, pad_size), (pad_size, pad_size)))
+        kernel = torch.FloatTensor(kernel).to(self.device)
+        return kernel.unsqueeze(0).repeat(batch_size, 1, 1)
 
-        if kernel_type == 'iso':
-            kernel = generate_isotropic_gaussian_kernel(kernel_size, sigma_x)
-        elif kernel_type == 'aniso':
-            kernel = generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-        elif kernel_type == 'generalized_iso':
-            kernel = generate_generalized_gaussian_kernel(kernel_size, sigma_x, beta_g)
-        elif kernel_type == 'generalized_aniso':
-            kernel = generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-        elif kernel_type == 'plateau_iso':
-            kernel = generate_plateau_gaussian_kernel(kernel_size, sigma_x, beta_p)
-        elif kernel_type == 'plateau_aniso':
-            kernel = generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation)
-
-        return kernel / np.sum(kernel)
-
-    def _create_kernel(self, batch_size=1):
-        """Create kernel(s) based on mode"""
-        if self.mode == 'batch':
-            # Generate kernels with same size for the batch
-            kernel_size = random.choice(range(
-                self.kernel_range[0] * 2 + 1,
-                self.kernel_range[1] * 2 + 1, 2
-            ))
-            kernels = []
-            for _ in range(batch_size):
-                kernel = self._generate_single_kernel(kernel_size)
-                # Reshape kernel to (H, W, 1) for proper stacking
-                kernel = kernel.reshape(kernel_size, kernel_size, 1)
-                kernels.append(kernel)
-            # Stack kernels along the last dimension
-            stacked_kernels = np.stack(kernels, axis=0)
-            # Reshape to (B, H, W) and move to correct device
-            return torch.FloatTensor(stacked_kernels.squeeze(-1)).to(self.device)
+    def generate_kernel2(self, batch_size):
+        kernel_size = random.choice(self.kernel_range)
+        if np.random.uniform() < self.sinc_prob2:
+            if kernel_size < 13:
+                omega_c = np.random.uniform(np.pi / 3, np.pi)
+            else:
+                omega_c = np.random.uniform(np.pi / 5, np.pi)
+            kernel2 = circular_lowpass_kernel(omega_c, kernel_size, pad_to=False)
         else:
-            # Generate single kernel and move to correct device
-            kernel = self._generate_single_kernel()
-            return torch.FloatTensor(kernel).to(self.device)
+            kernel2 = random_mixed_kernels(
+                self.kernel_list2,
+                self.kernel_prob2,
+                kernel_size,
+                self.blur_sigma2,
+                self.blur_sigma2,
+                [-math.pi, math.pi],
+                self.betag_range2,
+                self.betap_range2,
+                noise_range=None)
 
-    def apply_resize(self, tensor):
-        """Apply 2x downscale with random interpolation method"""
-        mode = random.choice(['bilinear', 'bicubic', 'area'])
-        out = F.interpolate(tensor, scale_factor=0.5, mode=mode)
-        return torch.clamp(out, 0, 1)  # Add clipping after resize
+        pad_size = (21 - kernel_size) // 2
+        kernel2 = np.pad(kernel2, ((pad_size, pad_size), (pad_size, pad_size)))
+        kernel2 = torch.FloatTensor(kernel2).to(self.device)
+        return kernel2.unsqueeze(0).repeat(batch_size, 1, 1)
 
-    def apply_noise(self, tensor, noise_prob, noise_range):
-        """Apply random noise to tensor"""
-        if random.random() < noise_prob:
-            noise = torch.randn_like(tensor).to(self.device) * random.uniform(*noise_range)
-            tensor = tensor + noise
-            return torch.clamp(tensor, 0, 1)
-        return tensor
+    def generate_sinc_kernel(self, batch_size):
+        if np.random.uniform() < self.final_sinc_prob:
+            kernel_size = random.choice(self.kernel_range)
+            omega_c = np.random.uniform(np.pi / 3, np.pi)
+            sinc_kernel = circular_lowpass_kernel(omega_c, kernel_size, pad_to=21)
+            sinc_kernel = torch.FloatTensor(sinc_kernel).to(self.device)
+        else:
+            sinc_kernel = self.pulse_tensor.clone()
+        return sinc_kernel.unsqueeze(0).repeat(batch_size, 1, 1)
 
-    def _process_tensor(self, tensor):
-        """Common processing pipeline for both single images and batches"""
-        # Ensure tensor is on correct device
-        tensor = tensor.to(self.device)
-        batch_size = tensor.size(0)
+    def add_intermittent_edges(self, image, canny_thresholds=[50, 150], length_range=[1, 3],
+                               color_shift_range=[-10, 10]):
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Generate kernels (they will be on the correct device from _create_kernel)
-        kernel1 = self._create_kernel(batch_size)
-        kernel2 = self._create_kernel(batch_size) if self.second_blur_prob > 0 else None
+        # Detect edges using Canny
+        edges = cv2.Canny(gray, *canny_thresholds)
 
-        # First degradation
-        out = tensor
+        # Get edge pixel coordinates
+        edge_coords = np.column_stack(np.where(edges > 0))
 
-        # Apply transformations
-        out = self.apply_resize(out)
-        out = filter2D(out, kernel1)
-        out = torch.clamp(out, 0, 1)  # Add clipping in case if random.random() >= noise_prob
-        out = self.apply_noise(out, self.gaussian_noise_prob, self.noise_range)
+        # Randomly select subset of edge points to reduce processing
+        if len(edge_coords) > 1000:
+            edge_coords = edge_coords[np.random.choice(len(edge_coords), 1000, replace=False)]
 
-        # Second degradation (optional)
-        if kernel2 is not None and random.random() < self.second_blur_prob:
-            out = filter2D(out, kernel2)
-            out = self.apply_noise(out, self.gaussian_noise_prob2, self.noise_range2)
+        # Prepare output image
+        output = image.copy()
 
-        return out
+        # Vectorized random operations
+        lengths = np.random.randint(length_range[0], length_range[1] + 1, size=len(edge_coords))
+        angles = np.random.uniform(0, 2 * np.pi, size=len(edge_coords))
 
-    def degrade_image(self, input_path, output_path):
-        """Process single image from file"""
-        if self.mode != 'single_image':
-            raise ValueError("This method is only for single image processing. Use process_batch for batches.")
+        # Compute end points
+        dx = (lengths * np.cos(angles)).astype(int)
+        dy = (lengths * np.sin(angles)).astype(int)
 
-        # Read and convert image
-        img = cv2.imread(input_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_t = np2tensor(img)
+        end_coords_x = np.clip(edge_coords[:, 1] + dx, 0, image.shape[1] - 1)
+        end_coords_y = np.clip(edge_coords[:, 0] + dy, 0, image.shape[0] - 1)
 
-        # Process the image
-        out = self._process_tensor(img_t)
+        # Vectorized color shifts
+        color_shifts = np.random.randint(color_shift_range[0], color_shift_range[1] + 1, size=(len(edge_coords), 3))
 
-        # Save result
-        out_np = tensor2np(out)
-        out_np = cv2.cvtColor(out_np.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        cv2.imwrite(output_path, out_np)
+        # Process each point
+        for (y, x), end_y, end_x, shift in zip(edge_coords, end_coords_y, end_coords_x, color_shifts):
+            color = np.clip(image[y, x] + shift, 0, 255).astype(np.uint8)
+            cv2.line(output, (x, y), (end_x, end_y), color.tolist(), 1)
 
-    def process_batch(self, hr_batch):
-        # Ensure all operations are performed on the correct device
-        if not isinstance(hr_batch, torch.Tensor):
-            hr_batch = torch.tensor(hr_batch, device=self.device)
-        elif hr_batch.device != self.device:
-            hr_batch = hr_batch.to(self.device)
-        """Process batch of images during training"""
-        if self.mode != 'batch':
-            raise ValueError("Degrader must be initialized with mode='batch' for batch processing")
-        return self._process_tensor(hr_batch)
+        return output
 
+    def add_rainbow_effects(self, image, edge_threshold=None, channel_shift=None):
+        # Vectorized edge detection and modification
+        edge_threshold_val = np.random.randint(*edge_threshold)
+        channel_shift_val = np.random.randint(*channel_shift)
 
-def np2tensor(np_frame):
-    """Convert numpy image to torch tensor"""
-    return torch.from_numpy(np.transpose(np_frame, (2, 0, 1))).unsqueeze(0).float() / 255
+        # Sobel edge detection
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+        sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1)
+        edges = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
 
+        # Create edge mask
+        edge_mask = edges > edge_threshold_val
 
-def tensor2np(tensor):
-    """Convert torch tensor to numpy image"""
-    return (np.transpose(tensor.detach().squeeze(0).cpu().numpy(), (1, 2, 0))) * 255
+        # Split channels
+        b, g, r = cv2.split(image)
 
+        # Vectorized channel modification
+        shift_mask = np.random.randint(-channel_shift_val, channel_shift_val + 1, size=b.shape)
 
-def filter2D(img, kernel):
-    """Apply 2D filter to image"""
-    k = kernel.size(-1)
-    b, c, h, w = img.size()
-    if k % 2 == 1:
-        img = F.pad(img, (k // 2, k // 2, k // 2, k // 2), mode='reflect')
-    else:
-        raise ValueError('Wrong kernel size')
+        b_mod = np.clip(b + shift_mask * edge_mask, 0, 255).astype(np.uint8)
+        g_mod = np.clip(g + shift_mask * edge_mask, 0, 255).astype(np.uint8)
+        r_mod = np.clip(r + shift_mask * edge_mask, 0, 255).astype(np.uint8)
 
-    ph, pw = img.size()[-2:]
-    if kernel.size(0) == 1:
-        img = img.view(b * c, 1, ph, pw)
-        kernel = kernel.view(1, 1, k, k)
-        return F.conv2d(img, kernel, padding=0).view(b, c, h, w)
-    else:
-        img = img.view(1, b * c, ph, pw)
-        kernel = kernel.view(b, 1, k, k).repeat(1, c, 1, 1).view(b * c, 1, k, k)
-        return F.conv2d(img, kernel, groups=b * c).view(b, c, h, w)
+        # Merge channels
+        result = cv2.merge([b_mod, g_mod, r_mod])
 
+        return result
 
-def generate_isotropic_gaussian_kernel(kernel_size, sigma):
-    """Generate isotropic Gaussian kernel"""
-    center = kernel_size // 2
-    x = np.arange(kernel_size) - center
-    x_2d, y_2d = np.meshgrid(x, x)
-    kernel = np.exp(-(x_2d ** 2 + y_2d ** 2) / (2 * sigma ** 2))
-    return kernel
+    def process_batch(self, gt_batch):
 
+        batch_size = gt_batch.size(0)
+        gt = gt_batch
+        gt_usm = self.usm_sharpener(gt)
 
-def generate_anisotropic_gaussian_kernel(kernel_size, sigma_x, sigma_y, rotation):
-    """Generate anisotropic Gaussian kernel"""
-    center = kernel_size // 2
-    x = np.arange(kernel_size) - center
-    x_2d, y_2d = np.meshgrid(x, x)
+        # Generate kernels with proper batch size
+        kernel1 = self.generate_kernel1(batch_size)
+        kernel2 = self.generate_kernel2(batch_size)
+        sinc_kernel = self.generate_sinc_kernel(batch_size)
 
-    x_rot = x_2d * np.cos(rotation) - y_2d * np.sin(rotation)
-    y_rot = x_2d * np.sin(rotation) + y_2d * np.cos(rotation)
+        ori_h, ori_w = gt.size()[2:4]
 
-    kernel = np.exp(-(x_rot ** 2 / (2 * sigma_x ** 2) + y_rot ** 2 / (2 * sigma_y ** 2)))
-    return kernel
+        # ----------------------- The first degradation process ----------------------- #
+        # intermittent_edges and rainbow_effects
+        out = gt_usm
+        out_np = out.permute(0, 2, 3, 1).detach().cpu().numpy()  # (B, H, W, C)
+        out_np = (out_np * 255).astype(np.uint8)
+        for i in range(batch_size):
+            img = out_np[i]
+            # intermittent_edges
+            if np.random.uniform() < self.intermittent_edges_prob:
+                img = self.add_intermittent_edges(img, canny_thresholds=self.intermittent_edges_canny_thresholds, length_range=self.intermittent_edges_length_range, color_shift_range=self.intermittent_edges_color_shift_range)
+            # rainbow_effects
+            if np.random.uniform() < self.rainbow_effects_prob:
+                img = self.add_rainbow_effects(img, edge_threshold=self.rainbow_effects_edge_threshold, channel_shift=self.rainbow_effects_channel_shift)
+            out_np[i] = img
+        out_np = out_np.astype(np.float32) / 255.0
+        out = torch.from_numpy(out_np).permute(0, 3, 1, 2).to(self.device)
 
+        # blur
+        temp_out = torch.zeros_like(out)
+        for i in range(batch_size):
+            temp_out[i] = filter2D(out[i:i + 1], kernel2[i:i + 1])
+        out = temp_out
 
-def generate_generalized_gaussian_kernel(kernel_size, sigma_x, beta):
-    """Generate generalized Gaussian kernel"""
-    center = kernel_size // 2
-    x = np.arange(kernel_size) - center
-    x_2d, y_2d = np.meshgrid(x, x)
-    kernel = np.exp(-((x_2d ** 2 + y_2d ** 2) / (2 * sigma_x ** 2)) ** beta)
-    return kernel
+        # random resize
+        updown_type = random.choices(['up', 'down', 'keep'], self.resize_prob)[0]
+        if updown_type == 'up':
+            scale = np.random.uniform(1, self.resize_range[1])
+        elif updown_type == 'down':
+            scale = np.random.uniform(self.resize_range[0], 1)
+        else:
+            scale = 1
+        mode = random.choice(['area', 'bilinear', 'bicubic'])
+        out = F.interpolate(out, scale_factor=scale, mode=mode)
 
+        # add noise
+        if np.random.uniform() < self.gaussian_noise_prob:
+            out = random_add_gaussian_noise_pt(
+                out, sigma_range=self.noise_range, clip=True, rounds=False, gray_prob=self.gray_noise_prob)
+        else:
+            out = random_add_poisson_noise_pt(
+                out,
+                scale_range=self.poisson_scale_range,
+                gray_prob=self.gray_noise_prob,
+                clip=True,
+                rounds=False)
 
-def generate_plateau_gaussian_kernel(kernel_size, sigma_x, beta):
-    """Generate plateau-shaped Gaussian kernel"""
-    center = kernel_size // 2
-    x = np.arange(kernel_size) - center
-    x_2d, y_2d = np.meshgrid(x, x)
-    r = np.sqrt(x_2d ** 2 + y_2d ** 2)
-    kernel = 1 / (1 + (r / sigma_x) ** beta)
-    return kernel
+        # JPEG compression
+        jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range)
+        out = torch.clamp(out, 0, 1)
+        out = self.jpeger(out, quality=jpeg_p)
+
+        # ----------------------- The second degradation process ----------------------- #
+        # intermittent_edges and rainbow_effects
+        out_np = out.permute(0, 2, 3, 1).detach().cpu().numpy()  # (B, H, W, C)
+        out_np = (out_np * 255).astype(np.uint8)
+        for i in range(batch_size):
+            img = out_np[i]
+            # intermittent_edges
+            if np.random.uniform() < self.intermittent_edges_prob2:
+                img = self.add_intermittent_edges(img, canny_thresholds=self.intermittent_edges_canny_thresholds2, length_range=self.intermittent_edges_length_range2, color_shift_range=self.intermittent_edges_color_shift_range2)
+            # rainbow_effects
+            if np.random.uniform() < self.rainbow_effects_prob2:
+                img = self.add_rainbow_effects(img, edge_threshold=self.rainbow_effects_edge_threshold2, channel_shift=self.rainbow_effects_channel_shift2)
+            out_np[i] = img
+        out_np = out_np.astype(np.float32) / 255.0
+        out = torch.from_numpy(out_np).permute(0, 3, 1, 2).to(self.device)
+
+        # blur
+        if np.random.uniform() < self.second_blur_prob:
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], kernel2[i:i + 1])
+            out = temp_out
+
+        # random resize
+        updown_type = random.choices(['up', 'down', 'keep'], self.resize_prob2)[0]
+        if updown_type == 'up':
+            scale = np.random.uniform(1, self.resize_range2[1])
+        elif updown_type == 'down':
+            scale = np.random.uniform(self.resize_range2[0], 1)
+        else:
+            scale = 1
+        mode = random.choice(['area', 'bilinear', 'bicubic'])
+        out = F.interpolate(
+            out, size=(int(ori_h / self.scale * scale), int(ori_w / self.scale * scale)), mode=mode)
+
+        # add noise
+        if np.random.uniform() < self.gaussian_noise_prob2:
+            out = random_add_gaussian_noise_pt(
+                out, sigma_range=self.noise_range2, clip=True, rounds=False, gray_prob=self.gray_noise_prob2)
+        else:
+            out = random_add_poisson_noise_pt(
+                out,
+                scale_range=self.poisson_scale_range2,
+                gray_prob=self.gray_noise_prob2,
+                clip=True,
+                rounds=False)
+
+        # # ----------------------- Final steps ----------------------- #
+        # JPEG compression + the final sinc filter
+        if np.random.uniform() < 0.5:
+            # resize back + the final sinc filter
+            mode = random.choice(['area', 'bilinear', 'bicubic'])
+            out = F.interpolate(out, size=(ori_h // self.scale, ori_w // self.scale), mode=mode)
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], sinc_kernel[i:i + 1])
+            out = temp_out
+            # JPEG compression
+            jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
+            out = torch.clamp(out, 0, 1)
+            out = self.jpeger(out, quality=jpeg_p)
+        else:
+            # JPEG compression
+            jpeg_p = out.new_zeros(out.size(0)).uniform_(*self.jpeg_range2)
+            out = torch.clamp(out, 0, 1)
+            out = self.jpeger(out, quality=jpeg_p)
+            # resize back + the final sinc filter
+            mode = random.choice(['area', 'bilinear', 'bicubic'])
+            out = F.interpolate(out, size=(ori_h // self.scale, ori_w // self.scale), mode=mode)
+            temp_out = torch.zeros_like(out)
+            for i in range(batch_size):
+                temp_out[i] = filter2D(out[i:i + 1], sinc_kernel[i:i + 1])
+            out = temp_out
+
+        # clamp and round
+        out = torch.clamp(out, 0, 1)
+        lq = torch.clamp((out * 255.0).round(), 0, 255) / 255.
+
+        return lq
 
 
 def main():
-    # Example usage for single image
-    degrader_single = ImageDegradationPipeline_custom(mode='single_image')
-    degrader_single.degrade_image('input_images/input.png', 'output_images/degraded.png')
-
     # Example usage for batch processing
-    degrader_batch = ImageDegradationPipeline_custom(mode='batch')
-    # Создаем случайный батч для демонстрации
-    dummy_batch = torch.rand(4, 3, 256, 256)  # batch_size=4, channels=3, height=256, width=256
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    degrader_batch = ImageDegradationPipeline_custom(scale=2, device=device)
+
+    # Create a random batch for demonstration
+    dummy_batch = torch.rand(4, 3, 256, 256).to(device)  # batch_size=4, channels=3, height=256, width=256
     lr_batch = degrader_batch.process_batch(dummy_batch)
     print(f"Processed batch shape: {lr_batch.shape}")
 
 
 if __name__ == '__main__':
     main()
-
