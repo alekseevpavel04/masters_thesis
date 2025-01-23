@@ -1,3 +1,18 @@
+'''
+This is the degradation method used in paper:
+"APISR: Anime Production Inspired Real-World Anime Super-Resolution"
+https://github.com/Kiteretsu77/APISR
+
+@inproceedings{wang2024apisr,
+  title={APISR: Anime Production Inspired Real-World Anime Super-Resolution},
+  author={Wang, Boyang and Yang, Fengyu and Yu, Xihang and Zhang, Chao and Zhao, Hanbin},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={25574--25584},
+  year={2024}
+}
+'''
+
+
 import argparse
 import cv2
 import torch
@@ -462,7 +477,7 @@ class WEBP:
     def compress_tensor(tensor_frames):
         single_frame = tensor2np(tensor_frames)
         # Convert to CV_8U explicitly
-        single_frame = (single_frame * 255).astype(np.uint8)
+        single_frame = (single_frame).astype(np.uint8)
         webp_quality = random.randint(30, 95)
         encode_param = [int(cv2.IMWRITE_WEBP_QUALITY), webp_quality]
         _, encimg = cv2.imencode('.webp', single_frame, encode_param)
