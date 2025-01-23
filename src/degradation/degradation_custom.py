@@ -57,6 +57,10 @@ class ImageDegradationPipeline_custom:
             intermittent_edges_canny_thresholds2=[50, 150],
             intermittent_edges_length_range2=[1, 3],
             intermittent_edges_color_shift_range2=[-10, 10],
+            rainbow_effects_edge_width=10,
+            rainbow_effects_pixel_randomness_rate=0.1,
+            rainbow_effects_edge_width2=10,
+            rainbow_effects_pixel_randomness_rate2=0.1
     ):
         self.scale = scale
         self.device = device
@@ -73,8 +77,10 @@ class ImageDegradationPipeline_custom:
         # First degradation parameters
         self.intermittent_edges_prob = intermittent_edges_prob
         self.rainbow_effects_prob = rainbow_effects_prob
+        self.rainbow_effects_edge_width = rainbow_effects_edge_width
         self.rainbow_effects_edge_threshold = rainbow_effects_edge_threshold
         self.rainbow_effects_channel_shift = rainbow_effects_channel_shift
+        self.rainbow_effects_pixel_randomness_rate = rainbow_effects_pixel_randomness_rate
         self.intermittent_edges_canny_thresholds = intermittent_edges_canny_thresholds
         self.intermittent_edges_length_range = intermittent_edges_length_range
         self.intermittent_edges_color_shift_range = intermittent_edges_color_shift_range
@@ -88,8 +94,10 @@ class ImageDegradationPipeline_custom:
         # Second degradation parameters
         self.intermittent_edges_prob2 = intermittent_edges_prob2
         self.rainbow_effects_prob2 = rainbow_effects_prob2
+        self.rainbow_effects_edge_width2 = rainbow_effects_edge_width2
         self.rainbow_effects_edge_threshold2 = rainbow_effects_edge_threshold2
         self.rainbow_effects_channel_shift2 = rainbow_effects_channel_shift2
+        self.rainbow_effects_pixel_randomness_rate2 = rainbow_effects_pixel_randomness_rate2
         self.intermittent_edges_canny_thresholds2 = intermittent_edges_canny_thresholds2
         self.intermittent_edges_length_range2 = intermittent_edges_length_range2
         self.intermittent_edges_color_shift_range2 = intermittent_edges_color_shift_range2
@@ -221,33 +229,62 @@ class ImageDegradationPipeline_custom:
 
         return output
 
-    def add_rainbow_effects(self, image, edge_threshold=None, channel_shift=None):
-        # Vectorized edge detection and modification
-        edge_threshold_val = np.random.randint(*edge_threshold)
-        channel_shift_val = np.random.randint(*channel_shift)
-
-        # Sobel edge detection
+    def add_rainbow_effects(self, image,
+                            edge_width=10,
+                            edge_threshold=[50, 100],
+                            channel_shift=[50, 150],
+                            pixel_randomness_rate=0.1):
+        # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
-        sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1)
+
+        # Apply Gaussian blur to control edge width
+        blurred = cv2.GaussianBlur(gray, (edge_width * 2 + 1, edge_width * 2 + 1), 0)
+
+        # Sobel edge detection with adjustable width
+        sobel_x = cv2.Sobel(blurred, cv2.CV_64F, 1, 0)
+        sobel_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1)
         edges = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
 
-        # Create edge mask
-        edge_mask = edges > edge_threshold_val
+        # Normalize edges
+        edges_normalized = edges / edges.max()
+
+        # Random thresholds
+        edge_threshold_val = np.random.randint(*edge_threshold)
+
+        # Create soft edge mask with gradient
+        edge_mask = edges_normalized > (edge_threshold_val / 255.0)
+        edge_intensity = edges_normalized * edge_mask
 
         # Split channels
         b, g, r = cv2.split(image)
 
-        # Vectorized channel modification
-        shift_mask = np.random.randint(-channel_shift_val, channel_shift_val + 1, size=b.shape)
+        # Создаем маску для случайных смещений
+        random_mask = np.random.random(b.shape) < pixel_randomness_rate
 
-        b_mod = np.clip(b + shift_mask * edge_mask, 0, 255).astype(np.uint8)
-        g_mod = np.clip(g + shift_mask * edge_mask, 0, 255).astype(np.uint8)
-        r_mod = np.clip(r + shift_mask * edge_mask, 0, 255).astype(np.uint8)
+        # Create unique random shifts для части пикселей
+        b_shift = np.zeros_like(b, dtype=np.float32)
+        g_shift = np.zeros_like(g, dtype=np.float32)
+        r_shift = np.zeros_like(r, dtype=np.float32)
+
+        b_shift[random_mask] = np.random.randint(-channel_shift[1], channel_shift[1] + 1,
+                                                 size=b_shift[random_mask].shape)
+        g_shift[random_mask] = np.random.randint(-channel_shift[1], channel_shift[1] + 1,
+                                                 size=g_shift[random_mask].shape)
+        r_shift[random_mask] = np.random.randint(-channel_shift[1], channel_shift[1] + 1,
+                                                 size=r_shift[random_mask].shape)
+
+        # Умножаем смещения на интенсивность края
+        b_shift *= edge_intensity
+        g_shift *= edge_intensity
+        r_shift *= edge_intensity
+
+        # Apply shifts with gradient
+        b_mod = np.clip(b + b_shift, 0, 255).astype(np.uint8)
+        g_mod = np.clip(g + g_shift, 0, 255).astype(np.uint8)
+        r_mod = np.clip(r + r_shift, 0, 255).astype(np.uint8)
 
         # Merge channels
         result = cv2.merge([b_mod, g_mod, r_mod])
-
         return result
 
     def process_batch(self, gt_batch):
@@ -275,7 +312,7 @@ class ImageDegradationPipeline_custom:
                 img = self.add_intermittent_edges(img, canny_thresholds=self.intermittent_edges_canny_thresholds, length_range=self.intermittent_edges_length_range, color_shift_range=self.intermittent_edges_color_shift_range)
             # rainbow_effects
             if np.random.uniform() < self.rainbow_effects_prob:
-                img = self.add_rainbow_effects(img, edge_threshold=self.rainbow_effects_edge_threshold, channel_shift=self.rainbow_effects_channel_shift)
+                img = self.add_rainbow_effects(img, edge_width=self.rainbow_effects_edge_width , edge_threshold=self.rainbow_effects_edge_threshold, channel_shift=self.rainbow_effects_channel_shift, pixel_randomness_rate= self.rainbow_effects_pixel_randomness_rate)
             out_np[i] = img
         out_np = out_np.astype(np.float32) / 255.0
         out = torch.from_numpy(out_np).permute(0, 3, 1, 2).to(self.device)
@@ -325,7 +362,7 @@ class ImageDegradationPipeline_custom:
                 img = self.add_intermittent_edges(img, canny_thresholds=self.intermittent_edges_canny_thresholds2, length_range=self.intermittent_edges_length_range2, color_shift_range=self.intermittent_edges_color_shift_range2)
             # rainbow_effects
             if np.random.uniform() < self.rainbow_effects_prob2:
-                img = self.add_rainbow_effects(img, edge_threshold=self.rainbow_effects_edge_threshold2, channel_shift=self.rainbow_effects_channel_shift2)
+                img = self.add_rainbow_effects(img, edge_width=self.rainbow_effects_edge_width2 , edge_threshold=self.rainbow_effects_edge_threshold2, channel_shift=self.rainbow_effects_channel_shift2, pixel_randomness_rate= self.rainbow_effects_pixel_randomness_rate2)
             out_np[i] = img
         out_np = out_np.astype(np.float32) / 255.0
         out = torch.from_numpy(out_np).permute(0, 3, 1, 2).to(self.device)
