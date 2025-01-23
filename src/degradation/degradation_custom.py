@@ -1,3 +1,17 @@
+'''
+This is the original degradation method based on:
+"Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data"
+https://github.com/xinntao/Real-ESRGAN
+
+@InProceedings{wang2021realesrgan,
+    author    = {Xintao Wang and Liangbin Xie and Chao Dong and Ying Shan},
+    title     = {Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data},
+    booktitle = {International Conference on Computer Vision Workshops (ICCVW)},
+    date      = {2021}
+}
+'''
+
+
 import torch
 import random
 import numpy as np
