@@ -28,9 +28,9 @@ loss_function_disc:
   _target_: src.loss.DiscriminatorCriterion
 
 trainer:
-  log_step: 1
-  n_epochs: 1
-  epoch_len: 20
+  log_step: 50
+  n_epochs: 7
+  epoch_len: 2000
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml

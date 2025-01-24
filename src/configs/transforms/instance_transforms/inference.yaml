@@ -3,5 +3,5 @@ train:
     _target_: torchvision.transforms.v2.Compose
     transforms:
       - _target_: src.transforms.img_augs.CentralCrop
-        target_width: 512
-        target_height: 512
+        target_width: 1024
+        target_height: 1024
