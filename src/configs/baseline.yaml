@@ -6,7 +6,7 @@ defaults:
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train_APISR
+  - degradation: train_custom
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
@@ -28,7 +28,7 @@ loss_function_disc:
   _target_: src.loss.DiscriminatorCriterion
 
 trainer:
-  log_step: 50
+  log_step: 10
   n_epochs: 7
   epoch_len: 2000
   disc_steps: 10

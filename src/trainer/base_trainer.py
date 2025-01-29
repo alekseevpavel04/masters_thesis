@@ -616,7 +616,7 @@ class BaseTrainer:
                 print(f"Loading discriminator weights from: {pretrained_path_disc} ...")
 
         # Load generator checkpoint
-        checkpoint_gen = torch.load(pretrained_path_gen, map_location=self.device, weights_only=True)
+        checkpoint_gen = torch.load(pretrained_path_gen, map_location=self.device, weights_only=False)
         if "state_dict_gen" in checkpoint_gen:
             self.model_gen.load_state_dict(checkpoint_gen["state_dict_gen"])
         elif "params_ema" in checkpoint_gen:
