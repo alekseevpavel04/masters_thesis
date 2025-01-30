@@ -5,11 +5,10 @@ from PIL import Image
 import io
 import random
 
-
 class ImageDegradationPipeline_base:
     def __init__(
             self,
-            jpeg_quality=10,  # Lower quality means stronger compression
+            jpeg_quality=[10, 50],
             mode='single_image',
             device="cpu"
     ):
@@ -34,9 +33,12 @@ class ImageDegradationPipeline_base:
             # Convert single tensor from batch to PIL Image
             img = self.to_pil(tensor[i].cpu())
 
+            # Randomly select JPEG quality within the specified range
+            quality = random.randint(self.jpeg_quality[0], self.jpeg_quality[1])
+
             # Apply JPEG compression
             buffer = io.BytesIO()
-            img.save(buffer, format='JPEG', quality=self.jpeg_quality)
+            img.save(buffer, format='JPEG', quality=quality)
             buffer.seek(0)
             compressed_img = Image.open(buffer)
 
