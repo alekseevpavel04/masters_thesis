@@ -334,7 +334,7 @@ class ImageDegradationPipeline_custom:
         # blur
         temp_out = torch.zeros_like(out)
         for i in range(batch_size):
-            temp_out[i] = filter2D(out[i:i + 1], kernel2[i:i + 1])
+            temp_out[i] = filter2D(out[i:i + 1], kernel1[i:i + 1])
         out = temp_out
 
         # random resize
