@@ -16,7 +16,7 @@ inferencer:
   save_path: "inference"  # path for saving inference results
   save_dir: "saved/models"  # directory for saving logs and checkpoints
   seed: 1
-  from_pretrained_gen: "assets/weights/custom.pth"
+  from_pretrained_gen: "assets/weights/custom_jpeg.pth"
   resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
   log_step: 10  # how often to log images during inference
 

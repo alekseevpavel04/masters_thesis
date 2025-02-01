@@ -43,7 +43,7 @@ gaussian_noise_prob: 0.1
 noise_range: [0, 5]
 poisson_scale_range: [0, 0.5]
 gray_noise_prob: 0.1
-jpeg_range: [30, 95]
+jpeg_range: [10, 50]
 
 # Вторая группа параметров изменения размера и шумов
 second_blur_prob: 0.4
@@ -53,7 +53,7 @@ gaussian_noise_prob2: 0.1
 noise_range2: [0, 5]
 poisson_scale_range2: [0, 0.5]
 gray_noise_prob2: 0.1
-jpeg_range2: [30, 95]
+jpeg_range2: [10, 50]
 
 # Финальные параметры
 final_sinc_prob: 0.1

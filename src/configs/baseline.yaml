@@ -6,7 +6,7 @@ defaults:
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train_custom
+  - degradation: train_custom_v2
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
@@ -28,9 +28,9 @@ loss_function_disc:
   _target_: src.loss.DiscriminatorCriterion
 
 trainer:
-  log_step: 10
-  n_epochs: 7
-  epoch_len: 2000
+  log_step: 1
+  n_epochs: 1
+  epoch_len: 50
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
