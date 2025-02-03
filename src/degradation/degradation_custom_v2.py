@@ -361,18 +361,33 @@ class ImageDegradationPipeline_custom_v2:
 
         return compressed.astype(np.uint8)
 
-    def compress_with_detail_preservation(self, image_tensor, block_size=8, quality=30):
-        if isinstance(image_tensor, torch.Tensor):
-            image = image_tensor.permute(0, 2, 3, 1).detach().cpu().numpy()
-            image = (image * 255).astype(np.uint8)
-        else:
-            raise TypeError("Ожидался тензор PyTorch в формате (B, C, H, W)")
+    def compress_with_detail_preservation(self, image_tensor, block_size=8, quality=50):
+        """
+        Compress image tensor using DCT transformation with detail preservation.
+
+        Args:
+            image_tensor (torch.Tensor): Input tensor in (B, C, H, W) format
+            block_size (int): Size of compression blocks (default: 8)
+            quality (int): Compression quality from 0 (worst) to 100 (best)
+
+        Returns:
+            torch.Tensor: Compressed image tensor in the same format
+        """
+        if not isinstance(image_tensor, torch.Tensor):
+            raise TypeError("Expected PyTorch tensor in (B, C, H, W) format")
+
+        # Validate and normalize quality parameter
+        quality = max(0, min(100, int(quality)))  # Ensure quality is between 0 and 100
+
+        # Convert tensor to numpy array
+        image = image_tensor.permute(0, 2, 3, 1).detach().cpu().numpy()
+        image = (image * 255).astype(np.uint8)
 
         batch_size, h, w, c = image.shape
         output_images = np.zeros_like(image)
 
         def create_quantization_matrices(quality):
-            # Стандартная матрица для яркости (Y)
+            # Standard JPEG luminance quantization matrix
             standard_luminance_matrix = np.array([
                 [16, 11, 10, 16, 24, 40, 51, 61],
                 [12, 12, 14, 19, 26, 58, 60, 55],
@@ -384,7 +399,7 @@ class ImageDegradationPipeline_custom_v2:
                 [72, 92, 95, 98, 112, 100, 103, 99]
             ])
 
-            # Стандартная матрица для цветности (Cr, Cb)
+            # Standard JPEG chrominance quantization matrix
             standard_chrominance_matrix = np.array([
                 [17, 18, 24, 47, 99, 99, 99, 99],
                 [18, 21, 26, 66, 99, 99, 99, 99],
@@ -396,19 +411,32 @@ class ImageDegradationPipeline_custom_v2:
                 [99, 99, 99, 99, 99, 99, 99, 99]
             ])
 
-            scale = 5000 / quality if quality < 50 else 200 - 2 * quality
+            # Handle quality = 0 case
+            if quality == 0:
+                return np.ones_like(standard_luminance_matrix) * 255, np.ones_like(standard_chrominance_matrix) * 255
+
+            # Standard JPEG quality scaling
+            if quality < 50:
+                scale = 5000 / quality
+            else:
+                scale = 200 - 2 * quality
+
+            # Scale matrices
             scaled_luminance = np.floor((standard_luminance_matrix * scale + 50) / 100)
             scaled_chrominance = np.floor((standard_chrominance_matrix * scale + 50) / 100)
 
-            return (np.clip(scaled_luminance, 1, 255).astype(np.uint8),
-                    np.clip(scaled_chrominance, 1, 255).astype(np.uint8))
+            # Ensure valid quantization values (1-255)
+            scaled_luminance = np.clip(scaled_luminance, 1, 255).astype(np.uint8)
+            scaled_chrominance = np.clip(scaled_chrominance, 1, 255).astype(np.uint8)
+
+            return scaled_luminance, scaled_chrominance
 
         def process_channel(channel, quant_matrix, h_p, w_p, block_size):
-            # Подготовка для векторизованной обработки
+            # Prepare for vectorized processing
             blocks_v = h_p // block_size
             blocks_h = w_p // block_size
 
-            # Разбиение на блоки с использованием stride_tricks
+            # Split into blocks using stride tricks
             strided_channel = np.lib.stride_tricks.as_strided(
                 channel,
                 shape=(blocks_v, blocks_h, block_size, block_size),
@@ -418,25 +446,25 @@ class ImageDegradationPipeline_custom_v2:
                          channel.strides[1])
             ).astype(np.float32)
 
-            # Вычитание 128 из всех блоков
+            # Subtract DC offset
             strided_channel -= 128
 
-            # Применение DCT ко всем блокам
+            # Apply DCT to all blocks
             dct_blocks = np.zeros_like(strided_channel)
             for i in range(blocks_v):
                 for j in range(blocks_h):
                     dct_blocks[i, j] = cv2.dct(strided_channel[i, j])
 
-            # Квантование
+            # Quantization with quality-adjusted matrices
             quantized_blocks = np.round(dct_blocks / quant_matrix) * quant_matrix
 
-            # Обратное DCT
+            # Inverse DCT
             reconstructed_blocks = np.zeros_like(quantized_blocks)
             for i in range(blocks_v):
                 for j in range(blocks_h):
                     reconstructed_blocks[i, j] = cv2.idct(quantized_blocks[i, j])
 
-            # Сборка изображения обратно
+            # Reassemble image
             reconstructed = np.zeros((h_p, w_p))
             for i in range(blocks_v):
                 for j in range(blocks_h):
@@ -445,11 +473,12 @@ class ImageDegradationPipeline_custom_v2:
 
             return np.clip(reconstructed + 128, 0, 255)
 
-        # Получение матриц квантования
+        # Get quantization matrices
         quant_matrix_y, quant_matrix_c = create_quantization_matrices(quality)
 
         for i in range(batch_size):
             img = image[i]
+            # Calculate padding if needed
             pad_h = (block_size - h % block_size) % block_size
             pad_w = (block_size - w % block_size) % block_size
 
@@ -460,21 +489,23 @@ class ImageDegradationPipeline_custom_v2:
             img_ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
             y, cr, cb = cv2.split(img_ycrcb)
 
-            # Обработка каждого канала с соответствующей матрицей квантования
+            # Process each channel with appropriate quantization matrix
             y_compressed = process_channel(y, quant_matrix_y, h_p, w_p, block_size)
             cr_compressed = process_channel(cr, quant_matrix_c, h_p, w_p, block_size)
             cb_compressed = process_channel(cb, quant_matrix_c, h_p, w_p, block_size)
 
-            # Объединение каналов
+            # Merge channels
             compressed_image_ycrcb = cv2.merge([y_compressed, cr_compressed, cb_compressed])
             compressed_image = cv2.cvtColor(compressed_image_ycrcb.astype(np.uint8),
                                             cv2.COLOR_YCrCb2BGR)
 
+            # Remove padding if it was added
             if pad_h > 0 or pad_w > 0:
                 compressed_image = compressed_image[:h, :w]
 
             output_images[i] = compressed_image
 
+        # Convert back to tensor format
         output_images = output_images.astype(np.float32) / 255.0
         return torch.from_numpy(output_images).permute(0, 3, 1, 2).to(image_tensor.device)
 
