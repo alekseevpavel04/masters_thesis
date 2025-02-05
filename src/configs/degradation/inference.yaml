@@ -1,4 +1,4 @@
 _target_: src.degradation.ImageDegradationPipeline_base
-jpeg_quality: [10, 20]
+jpeg_quality: [10, 30]
 mode: "batch"
 device: "cuda"
