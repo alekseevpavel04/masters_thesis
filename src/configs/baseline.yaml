@@ -6,7 +6,7 @@ defaults:
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train_RealESRGAN
+  - degradation: train_APISR
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
@@ -39,7 +39,7 @@ trainer:
   monitor: "max PSNR" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
   save_period: 1 # checkpoint each save_period epochs in addition to the best epoch
   early_stop: ${trainer.n_epochs} # epochs for early stopping
-  save_dir: "train_RealESRGAN"
+  save_dir: "saved"
   seed: 1
   from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
   from_pretrained_disc: "assets/weights/RealESRGAN_x2plus_netD.pth"

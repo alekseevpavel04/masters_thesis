@@ -4,6 +4,7 @@
 /outputs
 /train_custom
 /train_RealESRGAN
+/train_APISR
 /wandb
 
 # PyCharm проектные файлы
