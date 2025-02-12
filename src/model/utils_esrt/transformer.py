@@ -94,9 +94,9 @@ class EffAttention(nn.Module):
         self.qkv = nn.Linear(dim // 2, dim // 2 * 3, bias=qkv_bias)
         self.proj = nn.Linear(dim // 2, dim)
         self.attn_drop = nn.Dropout(attn_drop)
-        print('scale', self.scale)
-        print(dim)
-        print(dim // num_heads)
+        # print('scale', self.scale)
+        # print(dim)
+        # print(dim // num_heads)
         # self.proj = nn.Linear(dim, dim)
         # self.proj_drop = nn.Dropout(proj_drop)
 

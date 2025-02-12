@@ -1,0 +1,4 @@
+_target_: src.model.ESRT
+upscale: 2
+# _target_: src.model.SwinIR
+# upscale: 2

@@ -165,7 +165,7 @@ class Un(nn.Module):
 
 
 class ESRT(nn.Module):
-    def __init__(self, upscale=4, conv=common.default_conv):
+    def __init__(self, upscale=2, conv=common.default_conv):
         super(ESRT, self).__init__()
         wn = lambda x: torch.nn.utils.weight_norm(x)
         n_feats = 32
