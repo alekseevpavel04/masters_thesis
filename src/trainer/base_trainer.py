@@ -9,80 +9,66 @@ from src.datasets.data_utils import inf_loop
 from src.metrics.tracker import MetricTracker
 from src.utils.io_utils import ROOT_PATH
 
+from collections import OrderedDict
+
 
 class BaseTrainer:
-    """
-    Base class for all trainers.
-    """
-
     def __init__(
-        self,
-        model_gen,
-        model_disc,
-        criterion_gen,
-        criterion_disc,
-        metrics,
-        optimizer_gen,
-        optimizer_disc,
-        lr_scheduler_gen,
-        lr_scheduler_disc,
-        degrader,
-        config,
-        device,
-        dataloaders,
-        logger,
-        writer,
-        disc_steps = None,
-        gradient_accumulation_steps = None,
-        epoch_len=None,
-        skip_oom=True,
-        batch_transforms=None,
+            self,
+            model_gen=None,
+            model_disc=None,
+            model_diff=None,
+            criterion_gen=None,
+            criterion_disc=None,
+            criterion_diff=None,
+            metrics=None,
+            optimizer_gen=None,
+            optimizer_disc=None,
+            optimizer_diff=None,
+            lr_scheduler_gen=None,
+            lr_scheduler_disc=None,
+            lr_scheduler_diff=None,
+            degrader=None,
+            config=None,
+            device=None,
+            dataloaders=None,
+            logger=None,
+            writer=None,
+            disc_steps=None,
+            gradient_accumulation_steps=None,
+            epoch_len=None,
+            skip_oom=True,
+            batch_transforms=None,
     ):
-        """
-        Args:
-            model (nn.Module): PyTorch model.
-            criterion (nn.Module): loss function for model training.
-            metrics (dict): dict with the definition of metrics for training
-                (metrics[train]) and inference (metrics[inference]). Each
-                metric is an instance of src.metrics.BaseMetric.
-            optimizer (Optimizer): optimizer for the model.
-            lr_scheduler (LRScheduler): learning rate scheduler for the
-                optimizer.
-            config (DictConfig): experiment config containing training config.
-            device (str): device for tensors and model.
-            dataloaders (dict[DataLoader]): dataloaders for different
-                sets of data.
-            logger (Logger): logger that logs output.
-            writer (WandBWriter | CometMLWriter): experiment tracker.
-            epoch_len (int | None): number of steps in each epoch for
-                iteration-based training. If None, use epoch-based
-                training (len(dataloader)).
-            skip_oom (bool): skip batches with the OutOfMemory error.
-            batch_transforms (dict[Callable] | None): transforms that
-                should be applied on the whole batch. Depend on the
-                tensor name.
-        """
         self.is_train = True
-
         self.config = config
         self.cfg_trainer = self.config.trainer
+        self.model_type = self.cfg_trainer.model_type
 
         self.device = device
         self.skip_oom = skip_oom
-
         self.logger = logger
         self.log_step = config.trainer.get("log_step", 50)
 
-        self.model_gen = model_gen
-        self.model_disc = model_disc
-        self.criterion_gen = criterion_gen
-        self.criterion_disc = criterion_disc
-        self.optimizer_gen = optimizer_gen
-        self.optimizer_disc = optimizer_disc
-        self.lr_scheduler_gen = lr_scheduler_gen
-        self.lr_scheduler_disc = lr_scheduler_disc
-        self.degrader = degrader
+        # Initialize models based on model type
+        if self.model_type == "GAN":
+            self.model_gen = model_gen
+            self.model_disc = model_disc
+            self.criterion_gen = criterion_gen
+            self.criterion_disc = criterion_disc
+            self.optimizer_gen = optimizer_gen
+            self.optimizer_disc = optimizer_disc
+            self.lr_scheduler_gen = lr_scheduler_gen
+            self.lr_scheduler_disc = lr_scheduler_disc
+        elif self.model_type == "regular":
+            self.model_diff = model_diff
+            self.criterion_diff = criterion_diff
+            self.optimizer_diff = optimizer_diff
+            self.lr_scheduler_diff = lr_scheduler_diff
+        else:
+            raise ValueError(f"Unknown model type: {self.model_type}")
 
+        self.degrader = degrader
         self.batch_transforms = batch_transforms
         self.disc_steps = disc_steps
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -90,10 +76,8 @@ class BaseTrainer:
         # define dataloaders
         self.train_dataloader = dataloaders["train"]
         if epoch_len is None:
-            # epoch-based training
             self.epoch_len = len(self.train_dataloader)
         else:
-            # iteration-based training
             self.train_dataloader = inf_loop(self.train_dataloader)
             self.epoch_len = epoch_len
 
@@ -102,18 +86,13 @@ class BaseTrainer:
         }
 
         # define epochs
-        self._last_epoch = 0  # required for saving on interruption
+        self._last_epoch = 0
         self.start_epoch = 1
         self.epochs = self.cfg_trainer.n_epochs
 
         # configuration to monitor model performance and save best
-
-        self.save_period = (
-            self.cfg_trainer.save_period
-        )  # checkpoint each save_period epochs
-        self.monitor = self.cfg_trainer.get(
-            "monitor", "off"
-        )  # format: "mnt_mode mnt_metric"
+        self.save_period = self.cfg_trainer.save_period
+        self.monitor = self.cfg_trainer.get("monitor", "off")
 
         if self.monitor == "off":
             self.mnt_mode = "off"
@@ -121,13 +100,11 @@ class BaseTrainer:
         else:
             self.mnt_mode, self.mnt_metric = self.monitor.split()
             assert self.mnt_mode in ["min", "max"]
-
             self.mnt_best = inf if self.mnt_mode == "min" else -inf
             self.early_stop = self.cfg_trainer.get("early_stop", inf)
             if self.early_stop <= 0:
                 self.early_stop = inf
 
-        # setup visualization writer instance
         self.writer = writer
 
         # define metrics
@@ -143,22 +120,20 @@ class BaseTrainer:
             writer=self.writer,
         )
 
-        # define checkpoint dir and init everything if required
-
-        self.checkpoint_dir = (
-            ROOT_PATH / config.trainer.save_dir / config.writer.run_name
-        )
+        self.checkpoint_dir = ROOT_PATH / config.trainer.save_dir / config.writer.run_name
 
         if config.trainer.get("resume_from") is not None:
             resume_path = self.checkpoint_dir / config.trainer.resume_from
             self._resume_checkpoint(resume_path)
-        print(config.trainer.get("from_pretrained_gen"))
-        print(config.trainer.get("from_pretrained_disc"))
-        if config.trainer.get("from_pretrained_gen") is not None and config.trainer.get(
-                "from_pretrained_disc") is not None:
+
+        # Load pretrained weights if specified
+        if (config.trainer.get("from_pretrained_gen") is not None
+                or config.trainer.get("from_pretrained_disc") is not None
+                or config.trainer.get("from_pretrained_diff") is not None):
             self._from_pretrained(
                 config.trainer.get("from_pretrained_gen"),
-                config.trainer.get("from_pretrained_disc")
+                config.trainer.get("from_pretrained_disc"),
+                config.trainer.get("from_pretrained_diff")
             )
 
     def train(self):
@@ -206,24 +181,19 @@ class BaseTrainer:
                 break
 
     def _train_epoch(self, epoch):
-        """
-        Training logic for an epoch, including logging and evaluation on
-        non-train partitions.
-
-        Args:
-            epoch (int): current training epoch.
-        Returns:
-            logs (dict): logs that contain the average loss and metric in
-                this epoch.
-        """
         self.is_train = True
-        self.model_gen.train()
-        self.model_disc.train()
+
+        # Set models to train mode based on model type
+        if self.model_type == "GAN":
+            self.model_gen.train()
+            self.model_disc.train()
+        else:  # regular
+            self.model_diff.train()
+
         self.train_metrics.reset()
         self.writer.set_step((epoch - 1) * self.epoch_len)
         self.writer.add_scalar("epoch", epoch)
 
-        # Initialize variable for storing the last batch's metrics
         last_train_metrics = {}
 
         pbar = tqdm(self.train_dataloader, desc="train", total=self.epoch_len)
@@ -236,39 +206,46 @@ class BaseTrainer:
             except torch.cuda.OutOfMemoryError as e:
                 if self.skip_oom:
                     self.logger.warning("OOM on batch. Skipping batch.")
-                    torch.cuda.empty_cache()  # free some memory
+                    torch.cuda.empty_cache()
                     continue
                 else:
                     raise e
 
-            # Get gradient norms for both generator and discriminator
-            grad_norm_gen, grad_norm_disc = self._get_grad_norm()
+            # Update progress bar description based on model type
+            if self.model_type == "GAN":
+                grad_norm_gen, grad_norm_disc = self._get_grad_norm()
+                pbar.set_description(
+                    f"train | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | "
+                    f"g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
+                )
+                self.train_metrics.update("grad_norm_gen", grad_norm_gen)
+                self.train_metrics.update("grad_norm_disc", grad_norm_disc)
+                self.train_metrics.update("gen_loss", batch["gen_loss"])
+                self.train_metrics.update("disc_loss", batch["disc_loss"])
+            else:  # regular
+                grad_norm = self._get_grad_norm_diff()
+                pbar.set_description(
+                    f"train | diff_loss: {batch['diff_loss'].item():.3f} | g_norm: {grad_norm:.3f}"
+                )
+                self.train_metrics.update("grad_norm", grad_norm)
+                self.train_metrics.update("diff_loss", batch["diff_loss"])
 
-            # Update progress bar description with metrics while keeping the progress bar
-            pbar.set_description(
-                f"train | g_loss: {batch['gen_loss'].item():.3f} | d_loss: {batch['disc_loss'].item():.3f} | g_n_gen: {grad_norm_gen:.3f} | g_n_disc: {grad_norm_disc:.3f}"
-            )
-
-            # Log gradient norms only for specific logging
-            self.train_metrics.update("grad_norm_gen", grad_norm_gen)
-            self.train_metrics.update("grad_norm_disc", grad_norm_disc)
-
-            self.train_metrics.update("gen_loss", batch["gen_loss"])
-            self.train_metrics.update("disc_loss", batch["disc_loss"])
-
-            # Log current results periodically
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.epoch_len + batch_idx)
                 self.logger.debug(
-                    "Train Epoch: {} {} | Gen Loss: {:.6f} | Disc Loss: {:.6f}".format(
+                    "Train Epoch: {} {} Loss: {:.6f}".format(
                         epoch,
                         self._progress(batch_idx),
-                        batch["gen_loss"].item(),
-                        batch["disc_loss"].item()
+                        batch["diff_loss" if self.model_type == "regular" else "gen_loss"].item(),
                     )
                 )
-                self.writer.add_scalar("learning rate gen", self.lr_scheduler_gen.get_last_lr()[0])
-                self.writer.add_scalar("learning rate disc", self.lr_scheduler_disc.get_last_lr()[0])
+                # Log learning rate based on model type
+                if self.model_type == "GAN":
+                    self.writer.add_scalar("learning rate gen", self.lr_scheduler_gen.get_last_lr()[0])
+                    self.writer.add_scalar("learning rate disc", self.lr_scheduler_disc.get_last_lr()[0])
+                else:  # regular
+                    self.writer.add_scalar("learning rate", self.lr_scheduler_diff.get_last_lr()[0])
+
                 self._log_scalars(self.train_metrics)
                 self._log_batch(batch_idx, batch)
                 last_train_metrics = self.train_metrics.result()
@@ -279,12 +256,25 @@ class BaseTrainer:
 
         logs = last_train_metrics
 
-        # Run val/test
         for part, dataloader in self.evaluation_dataloaders.items():
             val_logs = self._evaluation_epoch(epoch, part, dataloader)
             logs.update(**{f"{part}_{name}": value for name, value in val_logs.items()})
 
         return logs
+
+
+    @torch.no_grad()
+    def _get_grad_norm_diff(self, norm_type=2):
+        """Calculate gradient norm for regular model"""
+        parameters = self.model_diff.parameters()
+        if isinstance(parameters, torch.Tensor):
+            parameters = [parameters]
+        parameters = [p for p in parameters if p.grad is not None]
+        total_norm = torch.norm(
+            torch.stack([torch.norm(p.grad.detach(), norm_type) for p in parameters]),
+            norm_type,
+        )
+        return total_norm.item()
 
     def _evaluation_epoch(self, epoch, part, dataloader):
         """
@@ -298,14 +288,20 @@ class BaseTrainer:
             logs (dict): logs that contain the information about evaluation.
         """
         self.is_train = False
-        self.model_gen.eval()
-        self.model_disc.eval()
+
+        # Adjusting model evaluation based on model type
+        if self.model_type == "GAN":
+            self.model_gen.eval()
+            self.model_disc.eval()
+        elif self.model_type == "regular":
+            self.model_diff.eval()
+
         self.evaluation_metrics.reset()
         with torch.no_grad():
             for batch_idx, batch in tqdm(
-                enumerate(dataloader),
-                desc=part,
-                total=len(dataloader),
+                    enumerate(dataloader),
+                    desc=part,
+                    total=len(dataloader),
             ):
                 batch = self.process_batch(
                     batch,
@@ -318,11 +314,12 @@ class BaseTrainer:
             )  # log only the last batch during inference
 
         result = self.evaluation_metrics.result()
-        # Удаляем gen_loss и disc_loss из результатов валидации
-        if 'gen_loss' in result:
-            del result['gen_loss']
-        if 'disc_loss' in result:
-            del result['disc_loss']
+
+        # Remove loss terms for evaluation
+        loss_keys = ['gen_loss', 'disc_loss', 'diff_loss']
+        for key in loss_keys:
+            if key in result:
+                del result[key]
 
         return result
 
@@ -509,32 +506,32 @@ class BaseTrainer:
             self.writer.add_scalar(f"{metric_name}", metric_tracker.avg(metric_name))
 
     def _save_checkpoint(self, epoch, save_best=False, only_best=False):
-        """
-        Save the checkpoints.
+        """Modified to handle both GAN and regular model checkpoints"""
+        if self.model_type == "GAN":
+            state = {
+                "arch_gen": type(self.model_gen).__name__,
+                "arch_disc": type(self.model_disc).__name__,
+                "epoch": epoch,
+                "state_dict_gen": self.model_gen.state_dict(),
+                "state_dict_disc": self.model_disc.state_dict(),
+                "optimizer_gen": self.optimizer_gen.state_dict(),
+                "optimizer_disc": self.optimizer_disc.state_dict(),
+                "lr_scheduler_gen": self.lr_scheduler_gen.state_dict(),
+                "lr_scheduler_disc": self.lr_scheduler_disc.state_dict(),
+            }
+        else:  # regular
+            state = {
+                "arch_diff": type(self.model_diff).__name__,
+                "epoch": epoch,
+                "state_dict_diff": self.model_diff.state_dict(),
+                "optimizer_diff": self.optimizer_diff.state_dict(),
+                "lr_scheduler_diff": self.lr_scheduler_diff.state_dict(),
+            }
 
-        Args:
-            epoch (int): current epoch number.
-            save_best (bool): if True, rename the saved checkpoint to 'model_best.pth'.
-            only_best (bool): if True and the checkpoint is the best, save it only as
-                'model_best.pth'(do not duplicate the checkpoint as
-                checkpoint-epochEpochNumber.pth)
-        """
-        arch_gen = type(self.model_gen).__name__
-        arch_disc = type(self.model_disc).__name__
-
-        state = {
-            "arch_gen": arch_gen,
-            "arch_disc": arch_disc,
-            "epoch": epoch,
-            "state_dict_gen": self.model_gen.state_dict(),
-            "state_dict_disc": self.model_disc.state_dict(),
-            "optimizer_gen": self.optimizer_gen.state_dict(),
-            "optimizer_disc": self.optimizer_disc.state_dict(),
-            "lr_scheduler_gen": self.lr_scheduler_gen.state_dict(),
-            "lr_scheduler_disc": self.lr_scheduler_disc.state_dict(),
+        state.update({
             "monitor_best": self.mnt_best,
             "config": self.config,
-        }
+        })
 
         filename = str(self.checkpoint_dir / f"checkpoint-epoch{epoch}.pth")
         if not (only_best and save_best):
@@ -593,7 +590,8 @@ class BaseTrainer:
 
         self.logger.info(f"Checkpoint loaded. Resume training from epoch {self.start_epoch}")
 
-    def _from_pretrained(self, pretrained_path_gen, pretrained_path_disc=None, mode="Train"):
+    def _from_pretrained(self, pretrained_path_gen=None, pretrained_path_disc=None, pretrained_path_diff=None,
+                         mode="Train"):
         """
         Init models with weights from pretrained files.
 
@@ -601,36 +599,101 @@ class BaseTrainer:
             pretrained_path_gen (str): path to the generator model state dict.
             pretrained_path_disc (str | None): path to the discriminator model state dict.
                 Required for Train mode, ignored for Inference mode.
+            pretrained_path_diff (str | None): path to the regular model state dict.
             mode (str): "Train" or "Inference". In Inference mode, only generator
                 weights are loaded.
         """
-        pretrained_path_gen = str(pretrained_path_gen)
-
-        if hasattr(self, "logger"):  # to support both trainer and inferencer
-            self.logger.info(f"Loading generator weights from: {pretrained_path_gen} ...")
+        if self.config.trainer.model_type == "GAN":
+            if pretrained_path_gen is not None:
+                self._load_pretrained_gen(self.model_gen, pretrained_path_gen, "generator")
             if mode == "Train" and pretrained_path_disc is not None:
-                self.logger.info(f"Loading discriminator weights from: {pretrained_path_disc} ...")
+                self._load_pretrained_disc(self.model_disc, pretrained_path_disc, "discriminator")
+        elif self.config.trainer.model_type == "regular":
+            if pretrained_path_diff is not None:
+                self._load_pretrained_diff(self.model_diff, pretrained_path_diff, "regular")
         else:
-            print(f"Loading generator weights from: {pretrained_path_gen} ...")
-            if mode == "Train" and pretrained_path_disc is not None:
-                print(f"Loading discriminator weights from: {pretrained_path_disc} ...")
+            raise ValueError(f"Unknown model type: {self.config.trainer.model_type}")
 
-        # Load generator checkpoint
-        checkpoint_gen = torch.load(pretrained_path_gen, map_location=self.device, weights_only=False)
-        if "state_dict_gen" in checkpoint_gen:
-            self.model_gen.load_state_dict(checkpoint_gen["state_dict_gen"])
-        elif "params_ema" in checkpoint_gen:
-            self.model_gen.load_state_dict(checkpoint_gen["params_ema"])
+    def _load_pretrained_gen(self, model, pretrained_path, model_name):
+        """
+        Helper method to load pretrained weights into a model.
+
+        Args:
+            model (nn.Module): The model to load weights into.
+            pretrained_path (str): Path to the pretrained weights.
+            model_name (str): Name of the model (for logging purposes).
+        """
+        if hasattr(self, "logger"):
+            self.logger.info(f"Loading {model_name} weights from: {pretrained_path} ...")
         else:
-            self.model_gen.load_state_dict(checkpoint_gen)  # Assuming it's a direct state dict
+            print(f"Loading {model_name} weights from: {pretrained_path} ...")
 
-        # Load discriminator checkpoint only in Train mode
-        if mode == "Train" and pretrained_path_disc is not None:
-            pretrained_path_disc = str(pretrained_path_disc)
-            checkpoint_disc = torch.load(pretrained_path_disc, map_location=self.device, weights_only=True)
-            if "state_dict_disc" in checkpoint_disc:
-                self.model_disc.load_state_dict(checkpoint_disc["state_dict_disc"])
-            elif "params" in checkpoint_disc:
-                self.model_disc.load_state_dict(checkpoint_disc["params"])
-            else:
-                self.model_disc.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict
+        checkpoint = torch.load(pretrained_path, map_location=self.device, weights_only=False)
+        if "state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["state_dict"])
+        elif "params_ema" in checkpoint:
+            model.load_state_dict(checkpoint["params_ema"])
+        else:
+            model.load_state_dict(checkpoint)  # Assuming it's a direct state dict
+    def _load_pretrained_disc(self, model, pretrained_path, model_name):
+        if hasattr(self, "logger"):
+           self.logger.info(f"Loading {model_name} weights from: {pretrained_path} ...")
+        else:
+           print(f"Loading {model_name} weights from: {pretrained_path} ...")
+
+        pretrained_path_disc = str(pretrained_path)
+        checkpoint_disc = torch.load(pretrained_path_disc, map_location=self.device, weights_only=True)
+        if "state_dict_disc" in checkpoint_disc:
+           model.load_state_dict(checkpoint_disc["state_dict_disc"])
+        elif "params" in checkpoint_disc:
+           model.load_state_dict(checkpoint_disc["params"])
+        else:
+           model.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict
+
+    def _load_pretrained_diff(self, model, pretrained_path, model_name):
+        if hasattr(self, "logger"):
+            self.logger.info(f"Loading {model_name} weights from: {pretrained_path} ...")
+        else:
+            print(f"Loading {model_name} weights from: {pretrained_path} ...")
+
+        checkpoint = torch.load(pretrained_path, map_location=self.device)
+
+        # Get state_dict with correct key
+        if 'state_dict_diff' in checkpoint:
+            state_dict = checkpoint['state_dict_diff']
+        elif 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+        elif 'params' in checkpoint:  # Add handling for 'params' key
+            state_dict = checkpoint['params']
+        else:
+            state_dict = checkpoint
+
+        model_dict = model.state_dict()
+
+        # Find mismatched keys
+        unexpected_keys = [k for k in state_dict.keys() if k not in model_dict]
+        missing_keys = [k for k in model_dict.keys() if k not in state_dict]
+
+        if unexpected_keys:
+            print(f"Warning: Found unexpected keys in checkpoint: {unexpected_keys}")
+        if missing_keys:
+            print(f"Warning: Missing keys in checkpoint: {missing_keys}")
+
+        # Filter state_dict
+        filtered_state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
+
+        # Try loading with strict=True first
+        try:
+            model.load_state_dict(filtered_state_dict, strict=True)
+            print("Weights loaded successfully with strict=True.")
+        except Exception as e:
+            print(f"Warning: Strict loading failed: {str(e)}")
+            try:
+                # If strict loading fails, try with strict=False
+                model.load_state_dict(filtered_state_dict, strict=False)
+                print("Weights loaded successfully with strict=False.")
+            except Exception as e:
+                print(f"Error: Failed to load weights even with strict=False: {str(e)}")
+                raise e  # Re-raise the exception if both attempts fail
+
+        return model
