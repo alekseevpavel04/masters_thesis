@@ -1,12 +1,13 @@
 defaults:
   - model_gen: gen
   - model_disc: disc
+  - model_diff: diff
   - writer: wandb
   - metrics: train
   - datasets: train
   - dataloader: train
   - transforms: train
-  - degradation: train_APISR
+  - degradation: train_RealESRGAN
   - _self_
 optimizer_gen:
   _target_: torch.optim.Adam
@@ -14,6 +15,9 @@ optimizer_gen:
 optimizer_disc:
   _target_: torch.optim.Adam
   lr: 3e-7
+optimizer_diff:
+  _target_: torch.optim.Adam
+  lr: 3e-4
 lr_scheduler_gen:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.9
@@ -22,15 +26,22 @@ lr_scheduler_disc:
   _target_: torch.optim.lr_scheduler.StepLR
   gamma: 0.9
   step_size: ${trainer.epoch_len}
+lr_scheduler_diff:
+  _target_: torch.optim.lr_scheduler.StepLR
+  gamma: 0.9
+  step_size: ${trainer.epoch_len}
 loss_function_gen:
   _target_: src.loss.GeneratorCriterion
 loss_function_disc:
   _target_: src.loss.DiscriminatorCriterion
+loss_function_diff:
+  _target_: src.loss.PixelLoss
+
 
 trainer:
-  log_step: 10
-  n_epochs: 30
-  epoch_len: 1000
+  log_step: 50
+  n_epochs: 15
+  epoch_len: 20000
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
@@ -39,9 +50,11 @@ trainer:
   monitor: "max PSNR" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
   save_period: 1 # checkpoint each save_period epochs in addition to the best epoch
   early_stop: ${trainer.n_epochs} # epochs for early stopping
-  save_dir: "saved"
+  save_dir: "ESRT_RealESRGAN"
   seed: 1
   from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
   from_pretrained_disc: "assets/weights/RealESRGAN_x2plus_netD.pth"
+  from_pretrained_diff: "assets/weights/ESRT_pretrained.pth"
   max_grad_norm: 10
-  gradient_accumulation_steps: 10
+  gradient_accumulation_steps: 50
+  model_type: "regular" # support "GAN" and "regular"
