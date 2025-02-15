@@ -5,6 +5,13 @@
 /train_custom
 /train_RealESRGAN
 /train_APISR
+/diff_saved1
+/diff_saved2
+/diff_saved3
+/diff_saved4
+/ESRT_custom
+/ESRT_RealESRGAN
+/ESRT_APISR
 /wandb
 
 # PyCharm проектные файлы

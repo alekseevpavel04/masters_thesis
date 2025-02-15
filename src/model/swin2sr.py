@@ -984,7 +984,7 @@ class Swin2SR(nn.Module):
 
         x = x / self.img_range + self.mean
         if self.upsampler == "pixelshuffle_aux":
-            return x[:, :, :H * self.upscale, :W * self.upscale], aux
+            return x[:, :, :H * self.upscale, :W * self.upscale]
 
         elif self.upsampler == "pixelshuffle_hf":
             x_out = x_out / self.img_range + self.mean
