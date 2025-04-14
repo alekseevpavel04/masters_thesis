@@ -48,7 +48,11 @@ class ImageDegradationPipeline_base:
 
         # Stack all compressed tensors back into a batch
         out = torch.stack(compressed_tensors).to(self.device)
-        return torch.clamp(out, 0, 1)
+        # Match other degradation modules with explicit scaling
+        out = torch.clamp(out, 0, 1)  # This is already here
+        # You might need this additional scaling step for consistency:
+        out = torch.clamp((out * 255.0).round(), 0, 255) / 255.
+        return out
 
     def _process_tensor(self, tensor):
         """Process either single image or batch of images"""
@@ -59,7 +63,10 @@ class ImageDegradationPipeline_base:
         out = self.apply_resize(tensor)
         out = self.apply_jpeg_compression(out)
 
+        # To match other degradation modules
+        out = torch.clamp((out * 255.0).round(), 0, 255) / 255.
         return out
+
 
     def degrade_image(self, input_path, output_path):
         """Process single image from file"""
