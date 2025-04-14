@@ -641,8 +641,12 @@ class BaseTrainer:
             model.load_state_dict(checkpoint["state_dict"])
         elif "params_ema" in checkpoint:
             model.load_state_dict(checkpoint["params_ema"])
+        elif "state_dict_gen" in checkpoint:
+            model.load_state_dict(checkpoint["state_dict_gen"])
         else:
-            model.load_state_dict(checkpoint)  # Assuming it's a direct state dict
+            model.load_state_dict(checkpoint)
+
+
     def _load_pretrained_disc(self, model, pretrained_path, model_name):
         if hasattr(self, "logger"):
            self.logger.info(f"Loading {model_name} weights from: {pretrained_path} ...")
@@ -657,6 +661,7 @@ class BaseTrainer:
            model.load_state_dict(checkpoint_disc["params"])
         else:
            model.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict
+
 
     def _load_pretrained_diff(self, model, pretrained_path, model_name):
         if hasattr(self, "logger"):
@@ -705,3 +710,4 @@ class BaseTrainer:
                 raise e  # Re-raise the exception if both attempts fail
 
         return model
+
