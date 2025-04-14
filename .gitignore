@@ -13,6 +13,10 @@
 /ESRT_RealESRGAN
 /ESRT_APISR
 /wandb
+/swin_APISR
+/swin_RealESRGAN
+/swin_custom
+/proxy
 
 # PyCharm проектные файлы
 .idea/
