@@ -93,20 +93,7 @@ class Inferencer(BaseTrainer):
             part_logs[part] = logs
         return part_logs
 
-
     def process_batch(self, batch_idx, batch, metrics, part):
-        """
-        Generate high-resolution images from low-resolution inputs
-        and compute metrics.
-
-        Args:
-            batch_idx (int): current batch index.
-            batch (dict): batch data from dataloader.
-            metrics (MetricTracker): metrics tracker.
-            part (str): partition name for saving.
-        Returns:
-            batch (dict): processed batch with generated images.
-        """
         batch = self.move_batch_to_device(batch)
         batch = self.transform_batch(batch)
 
@@ -114,7 +101,10 @@ class Inferencer(BaseTrainer):
         batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
 
         # Generate high-resolution images
-        batch["gen_output"] = self.model_gen(batch["lr_image"])
+        if self.config.inferencer.model_type == "GAN":
+            batch["gen_output"] = self.model_gen(batch["lr_image"])
+        else:  # regular
+            batch["gen_output"] = self.model_diff(batch["lr_image"])
 
         # Update metrics
         if metrics is not None:
@@ -123,8 +113,7 @@ class Inferencer(BaseTrainer):
 
         # Log images at specified intervals
         if self.writer is not None and batch_idx % self.log_step == 0:
-            self.writer.set_step(batch_idx, part)  # устанавливаем шаг
-            # Берем только первое изображение из батча [0:1]
+            self.writer.set_step(batch_idx, part)
             self.writer.add_images(f"{part}/original", torch.clamp(batch["data_object"][0:1], 0, 1))
             self.writer.add_images(f"{part}/generated", torch.clamp(batch["gen_output"][0:1], 0, 1))
             self.writer.add_images(f"{part}/low_res", torch.clamp(batch["lr_image"][0:1], 0, 1))
