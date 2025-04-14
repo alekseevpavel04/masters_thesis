@@ -3,5 +3,5 @@ train:
     _target_: torchvision.transforms.v2.Compose
     transforms:
       - _target_: src.transforms.img_augs.CentralCrop
-        target_width: 256 # 1024 for RealESRGAN, 256 for ESRT
-        target_height: 256 # 1024 for RealESRGAN, 256 for ESRT
+        target_width: 256 # 1024 for RealESRGAN, 256 for swin, 256 for ESRT
+        target_height: 256 # 1024 for RealESRGAN, 256 for swin, 256 for ESRT
