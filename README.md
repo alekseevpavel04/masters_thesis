@@ -128,3 +128,4 @@ You can create your own dataset, follow the [instruction](dataset_preparation/RE
 - **Atarashii Joushi wa Do Tennen** - Episodes: 5, 11
 
 **Total:** 10.1 thousand .png files, 35.77 GB in size.
+
