@@ -37,6 +37,7 @@ def main(config):
 
     # build generator model only (we don't need discriminator for inference)
     model_gen = instantiate(config.model_gen).to(device)
+    model_diff = instantiate(config.model_diff).to(device)
 
     # get metrics for super-resolution evaluation
     metrics = instantiate(config.metrics)
@@ -51,6 +52,7 @@ def main(config):
 
     inferencer = Inferencer(
         model_gen=model_gen,
+        model_diff=model_diff,
         degrader=degrader,
         config=config,
         device=device,

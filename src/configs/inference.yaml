@@ -1,5 +1,7 @@
 defaults:
   - model_gen: gen
+  - model_disc: disc
+  - model_diff: diff
   - writer: wandb
   - metrics: inference
   - datasets: inference
@@ -8,20 +10,18 @@ defaults:
   - degradation: train_RealESRGAN
   - _self_
 
-trainer:
-  model_type: "regular" # support "GAN" and "regular"
-  save_dir: "proxy"
-  override: True
+
 
 inferencer:
+  model_type: "regular"
   device_tensors: ["data_object"]  # which tensors should be on device (ex. GPU)
   device: auto  # device name or "auto"
   override: True  # if True, will override the previous run with the same name
   save_path: "inference"  # path for saving inference results
   save_dir: "saved/models"  # directory for saving logs and checkpoints
   seed: 1
-  from_pretrained_gen: "assets/weights/RealESRGAN_RealESRGAN_degradation_30ep.pth"
-  from_pretrained_diff: "assets/weights/RealESRGAN_RealESRGAN_degradation_30ep.pth"
+  from_pretrained_gen: "assets/weights/swin_RealESRGAN_degradation_10ep.pth"
+  from_pretrained_diff: "assets/weights/swin_RealESRGAN_degradation_10ep.pth"
   resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
   log_step: 10  # how often to log images during inference
 

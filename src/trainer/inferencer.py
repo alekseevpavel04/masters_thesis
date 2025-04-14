@@ -15,6 +15,7 @@ class Inferencer(BaseTrainer):
     def __init__(
             self,
             model_gen,
+            model_diff,
             config,
             device,
             dataloaders,
@@ -48,6 +49,7 @@ class Inferencer(BaseTrainer):
         self.cfg_trainer = self.config.inferencer
         self.device = device
         self.model_gen = model_gen
+        self.model_diff = model_diff
         self.batch_transforms = batch_transforms
         self.writer = writer
         self.logger = logger
@@ -71,7 +73,10 @@ class Inferencer(BaseTrainer):
             self.evaluation_metrics = None
 
         if not skip_model_load:
-            self._from_pretrained(pretrained_path_gen = config.inferencer.get("from_pretrained_gen"), mode="Inference")
+            if self.config.inferencer.model_type == "GAN":
+                self._from_pretrained(pretrained_path_gen = config.inferencer.get("from_pretrained_gen"), mode="Inference")
+            else:
+                self._from_pretrained(pretrained_path_diff=config.inferencer.get("from_pretrained_diff"), mode="Inference")
 
 
     def run_inference(self):

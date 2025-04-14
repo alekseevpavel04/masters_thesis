@@ -603,16 +603,24 @@ class BaseTrainer:
             mode (str): "Train" or "Inference". In Inference mode, only generator
                 weights are loaded.
         """
-        if self.config.trainer.model_type == "GAN":
-            if pretrained_path_gen is not None:
+        if mode == "Train":
+            if self.config.trainer.model_type == "GAN":
+                if pretrained_path_gen is not None:
+                    self._load_pretrained_gen(self.model_gen, pretrained_path_gen, "generator")
+                if mode == "Train" and pretrained_path_disc is not None:
+                    self._load_pretrained_disc(self.model_disc, pretrained_path_disc, "discriminator")
+            elif self.config.trainer.model_type == "regular":
+                if pretrained_path_diff is not None:
+                    self._load_pretrained_diff(self.model_diff, pretrained_path_diff, "regular")
+            else:
+                raise ValueError(f"Unknown model type: {self.config.trainer.model_type}")
+
+        elif mode == "Inference":
+            print(pretrained_path_diff)
+            if self.config.inferencer.model_type == "GAN":
                 self._load_pretrained_gen(self.model_gen, pretrained_path_gen, "generator")
-            if mode == "Train" and pretrained_path_disc is not None:
-                self._load_pretrained_disc(self.model_disc, pretrained_path_disc, "discriminator")
-        elif self.config.trainer.model_type == "regular":
-            if pretrained_path_diff is not None:
+            elif self.config.inferencer.model_type == "regular":
                 self._load_pretrained_diff(self.model_diff, pretrained_path_diff, "regular")
-        else:
-            raise ValueError(f"Unknown model type: {self.config.trainer.model_type}")
 
     def _load_pretrained_gen(self, model, pretrained_path, model_name):
         """
