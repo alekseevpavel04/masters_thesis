@@ -616,11 +616,12 @@ class BaseTrainer:
                 raise ValueError(f"Unknown model type: {self.config.trainer.model_type}")
 
         elif mode == "Inference":
-            print(pretrained_path_diff)
             if self.config.inferencer.model_type == "GAN":
                 self._load_pretrained_gen(self.model_gen, pretrained_path_gen, "generator")
             elif self.config.inferencer.model_type == "regular":
+                print(f"Loading regular model from: {pretrained_path_diff}")
                 self._load_pretrained_diff(self.model_diff, pretrained_path_diff, "regular")
+
 
     def _load_pretrained_gen(self, model, pretrained_path, model_name):
         """
@@ -662,8 +663,15 @@ class BaseTrainer:
         else:
            model.load_state_dict(checkpoint_disc)  # Assuming it's a direct state dict
 
-
     def _load_pretrained_diff(self, model, pretrained_path, model_name):
+        """
+        Helper method to load pretrained weights into a model with specific handling for Swin2SR.
+
+        Args:
+            model (nn.Module): The model to load weights into.
+            pretrained_path (str): Path to the pretrained weights.
+            model_name (str): Name of the model (for logging purposes).
+        """
         if hasattr(self, "logger"):
             self.logger.info(f"Loading {model_name} weights from: {pretrained_path} ...")
         else:
@@ -671,43 +679,107 @@ class BaseTrainer:
 
         checkpoint = torch.load(pretrained_path, map_location=self.device)
 
-        # Get state_dict with correct key
+        # Print checkpoint keys for debugging
+        print(f"Checkpoint keys: {list(checkpoint.keys())}")
+
+        # Check if we're dealing with Swin2SR model that needs special handling
+        custom_type = getattr(self.config.get('inferencer', self.config.get('trainer')), "custom_type", None)
+        print(f"Custom type: {custom_type}")
+
+        # Extract state dict based on available keys, with priority order
+        state_dict = None
+
+        # First, try to extract state dict based on our own checkpoint format
         if 'state_dict_diff' in checkpoint:
+            print("Using state_dict_diff from checkpoint")
             state_dict = checkpoint['state_dict_diff']
+        # Then try common formats
         elif 'state_dict' in checkpoint:
+            print("Using state_dict from checkpoint")
             state_dict = checkpoint['state_dict']
-        elif 'params' in checkpoint:  # Add handling for 'params' key
+        elif 'params_ema' in checkpoint:
+            print("Using params_ema from checkpoint")
+            state_dict = checkpoint['params_ema']
+        elif 'params' in checkpoint:
+            print("Using params from checkpoint")
             state_dict = checkpoint['params']
+        elif 'model' in checkpoint:
+            print("Using model from checkpoint")
+            state_dict = checkpoint['model']
         else:
+            # If no recognizable keys, assume the checkpoint itself is the state dict
+            print("Using checkpoint directly as state dict")
             state_dict = checkpoint
 
+        if state_dict is None:
+            raise ValueError(f"Could not find state dict in checkpoint with keys: {list(checkpoint.keys())}")
+
+        # Check for state dict keys to help with debugging
+        print(f"State dict contains {len(state_dict)} keys")
+        if len(state_dict) > 0:
+            print(f"Sample keys: {list(state_dict.keys())[:5]}")
+
+        # Handle model-specific behaviors
+        if custom_type == "Swin2SR":
+            # Fix key prefixes if needed (common in pretrained models)
+            if all(k.startswith('module.') for k in state_dict.keys()):
+                print("Removing 'module.' prefix from state dict keys")
+                state_dict = {k[7:]: v for k, v in state_dict.items()}
+
+            # Try loading with different strictness levels for Swin2SR
+            try:
+                print("Attempting to load Swin2SR with strict=False")
+                model.load_state_dict(state_dict, strict=False)
+                print("Successfully loaded Swin2SR weights with strict=False")
+                return model
+            except Exception as e:
+                print(f"Warning: Failed to load Swin2SR weights: {str(e)}")
+
+                # Additional fallback for Swin2SR: directly load only matching keys
+                print("Attempting direct parameter assignment for Swin2SR")
+                model_dict = model.state_dict()
+                matched_keys = 0
+
+                for name, param in model.named_parameters():
+                    if name in state_dict:
+                        param.data.copy_(state_dict[name])
+                        matched_keys += 1
+
+                print(f"Directly assigned {matched_keys} parameters")
+                return model
+
+        # Default loading logic for other models
         model_dict = model.state_dict()
 
-        # Find mismatched keys
-        unexpected_keys = [k for k in state_dict.keys() if k not in model_dict]
-        missing_keys = [k for k in model_dict.keys() if k not in state_dict]
-
-        if unexpected_keys:
-            print(f"Warning: Found unexpected keys in checkpoint: {unexpected_keys}")
-        if missing_keys:
-            print(f"Warning: Missing keys in checkpoint: {missing_keys}")
-
-        # Filter state_dict
+        # Filter state_dict to only include keys that exist in the model
         filtered_state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
+        print(f"Filtered state dict contains {len(filtered_state_dict)}/{len(state_dict)} keys from original")
 
-        # Try loading with strict=True first
+        # Check if there's any overlap at all
+        if len(filtered_state_dict) == 0:
+            print("WARNING: No matching keys found between checkpoint and model!")
+            print(f"Model keys (sample): {list(model_dict.keys())[:5]}")
+            print(f"Checkpoint keys (sample): {list(state_dict.keys())[:5]}")
+
+            # Try to find partial matches - this can help debugging
+            print("Looking for partial key matches...")
+            model_keys = set(model_dict.keys())
+            checkpoint_keys = set(state_dict.keys())
+
+            # Check if removing prefixes would help
+            if all('.' in k for k in checkpoint_keys):
+                checkpoint_suffixes = {k.split('.')[-1] for k in checkpoint_keys}
+                model_suffixes = {k.split('.')[-1] for k in model_keys}
+                common_suffixes = checkpoint_suffixes.intersection(model_suffixes)
+                if len(common_suffixes) > 0:
+                    print(f"Found {len(common_suffixes)} common key suffixes. Prefix mismatch likely.")
+
+        # Try to load with both strict options
         try:
-            model.load_state_dict(filtered_state_dict, strict=True)
-            print("Weights loaded successfully with strict=True.")
+            model.load_state_dict(filtered_state_dict, strict=False)
+            print(f"Weights loaded with strict=False ({len(filtered_state_dict)}/{len(model_dict)} keys matched)")
         except Exception as e:
-            print(f"Warning: Strict loading failed: {str(e)}")
-            try:
-                # If strict loading fails, try with strict=False
-                model.load_state_dict(filtered_state_dict, strict=False)
-                print("Weights loaded successfully with strict=False.")
-            except Exception as e:
-                print(f"Error: Failed to load weights even with strict=False: {str(e)}")
-                raise e  # Re-raise the exception if both attempts fail
+            print(f"Error: Failed to load weights even with strict=False: {str(e)}")
+            raise e
 
         return model
-

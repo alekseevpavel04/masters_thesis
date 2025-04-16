@@ -89,7 +89,23 @@ class Trainer(BaseTrainer):
                         self.optimizer_diff.zero_grad()
 
                     batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
-                    batch["diff_output"] = self.model_diff(batch["lr_image"])
+
+                    # Check for custom model type
+                    custom_type = getattr(self.config.trainer, "custom_type", None)
+
+                    if custom_type == "Swin2SR":
+                        # Handle Swin2SR model output
+                        output = self.model_diff(batch["lr_image"])
+
+                        # If it's a tuple, take the first element
+                        if isinstance(output, tuple):
+                            batch["diff_output"] = output[0]
+                        else:
+                            batch["diff_output"] = output
+                    else:
+                        # Standard handling for other models
+                        batch["diff_output"] = self.model_diff(batch["lr_image"])
+
                     batch["diff_loss"] = self.criterion_diff(batch["diff_output"], batch["data_object"])
 
                     scaled_diff_loss = batch["diff_loss"] / self.gradient_accumulation_steps
@@ -101,28 +117,44 @@ class Trainer(BaseTrainer):
                     if (self.current_accumulation_step + 1) % self.gradient_accumulation_steps == 0:
                         self.optimizer_diff.step()
 
-                self.current_accumulation_step = (self.current_accumulation_step + 1) % self.gradient_accumulation_steps
+                    self.current_accumulation_step = (
+                                                                 self.current_accumulation_step + 1) % self.gradient_accumulation_steps
 
-            else:
-                with torch.no_grad():
-                    if self.config.trainer.model_type == "GAN":
-                        batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
-                        batch["gen_output"] = self.model_gen(batch["lr_image"])
+                else:
+                    with torch.no_grad():
+                        if self.config.trainer.model_type == "GAN":
+                            batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
+                            batch["gen_output"] = self.model_gen(batch["lr_image"])
 
-                        disc_fake = self.model_disc(batch["gen_output"])
-                        disc_real = self.model_disc(batch["data_object"])
+                            disc_fake = self.model_disc(batch["gen_output"])
+                            disc_real = self.model_disc(batch["data_object"])
 
-                        batch["disc_loss"] = self.criterion_disc(disc_fake, disc_real, batch)
-                        batch["gen_loss"] = self.criterion_gen(disc_fake, batch)
+                            batch["disc_loss"] = self.criterion_disc(disc_fake, disc_real, batch)
+                            batch["gen_loss"] = self.criterion_gen(disc_fake, batch)
 
-                        del disc_fake, disc_real
-                    elif self.config.trainer.model_type == "regular":
-                        batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
-                        batch["diff_output"] = self.model_diff(batch["lr_image"])
-                        batch["diff_loss"] = self.criterion_diff(batch["diff_output"], batch["data_object"])
+                            del disc_fake, disc_real
+                        elif self.config.trainer.model_type == "regular":
+                            batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
 
+                            # Check for custom model type
+                            custom_type = getattr(self.config.trainer, "custom_type", None)
 
-                    torch.cuda.empty_cache()
+                            if custom_type == "Swin2SR":
+                                # Handle Swin2SR model output
+                                output = self.model_diff(batch["lr_image"])
+
+                                # If it's a tuple, take the first element
+                                if isinstance(output, tuple):
+                                    batch["diff_output"] = output[0]
+                                else:
+                                    batch["diff_output"] = output
+                            else:
+                                # Standard handling for other models
+                                batch["diff_output"] = self.model_diff(batch["lr_image"])
+
+                            batch["diff_loss"] = self.criterion_diff(batch["diff_output"], batch["data_object"])
+
+                        torch.cuda.empty_cache()
 
             if self.is_train and (self.current_accumulation_step + 1) % self.log_step == 0:
                 self.last_metrics = {}
@@ -138,7 +170,7 @@ class Trainer(BaseTrainer):
                     metrics.update(name, value)
             elif not self.is_train:
                 for met in metric_funcs:
-                    metric_value = met(**batch)  # Вычисляем метрику
+                    metric_value = met(**batch)
                     metrics.update(met.name, metric_value)
 
             return batch

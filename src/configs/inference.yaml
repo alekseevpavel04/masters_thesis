@@ -11,15 +11,16 @@ defaults:
   - _self_
 
 inferencer:
-  model_type: "regular"
+  model_type: "regular" # GAN or regular
+  custom_type: "Swin2SR"  # Options: "ESRT", "Swin2SR", or null for default handling
   device_tensors: ["data_object"]  # which tensors should be on device (ex. GPU)
   device: auto  # device name or "auto"
   override: True  # if True, will override the previous run with the same name
   save_path: "inference"  # path for saving inference results
   save_dir: "saved/models"  # directory for saving logs and checkpoints
   seed: 1
-  from_pretrained_gen: "assets/weights/RealESRGAN_custom_degradation_30ep.pth"
-  from_pretrained_diff: "assets/weights/swin_APISR_degradation_10ep.pth"
+  from_pretrained_gen: "assets/weights/NONE"
+  from_pretrained_diff: "assets/weights/model_Swin2SR__degradation_APISR__10ep.pth"
   resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
   log_step: 10  # how often to log images during inference
 

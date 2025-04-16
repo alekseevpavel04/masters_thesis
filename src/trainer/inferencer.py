@@ -24,7 +24,7 @@ class Inferencer(BaseTrainer):
             writer=None,
             logger=None,
             log_step=None,
-            degrader = None,
+            degrader=None,
             batch_transforms=None,
             skip_model_load=False,
     ):
@@ -33,6 +33,7 @@ class Inferencer(BaseTrainer):
 
         Args:
             model_gen (nn.Module): Generator model for super-resolution.
+            model_diff (nn.Module): Regular model for super-resolution.
             config (DictConfig): run config containing inferencer config.
             device (str): device for tensors and model.
             dataloaders (dict[DataLoader]): dataloaders for different sets of data.
@@ -42,7 +43,10 @@ class Inferencer(BaseTrainer):
             skip_model_load (bool): if False, load pre-trained checkpoint.
         """
         assert (
-                skip_model_load or config.inferencer.get("from_pretrained_gen") is not None
+                skip_model_load or
+                (config.inferencer.model_type == "GAN" and config.inferencer.get("from_pretrained_gen") is not None) or
+                (config.inferencer.model_type == "regular" and config.inferencer.get(
+                    "from_pretrained_diff") is not None)
         ), "Provide checkpoint or set skip_model_load=True"
 
         self.config = config
@@ -55,6 +59,13 @@ class Inferencer(BaseTrainer):
         self.logger = logger
         self.log_step = log_step
         self.degrader = degrader
+        self.custom_type = config.inferencer.get("custom_type", None)
+
+        if self.custom_type:
+            if hasattr(self, "logger"):
+                self.logger.info(f"Using custom model type: {self.custom_type}")
+            else:
+                print(f"Using custom model type: {self.custom_type}")
 
         # Setup dataloaders
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items()}
@@ -74,10 +85,11 @@ class Inferencer(BaseTrainer):
 
         if not skip_model_load:
             if self.config.inferencer.model_type == "GAN":
-                self._from_pretrained(pretrained_path_gen = config.inferencer.get("from_pretrained_gen"), mode="Inference")
+                self._from_pretrained(pretrained_path_gen=config.inferencer.get("from_pretrained_gen"),
+                                      mode="Inference")
             else:
-                self._from_pretrained(pretrained_path_diff=config.inferencer.get("from_pretrained_diff"), mode="Inference")
-
+                self._from_pretrained(pretrained_path_diff=config.inferencer.get("from_pretrained_diff"),
+                                      mode="Inference")
 
     def run_inference(self):
         """
@@ -104,7 +116,21 @@ class Inferencer(BaseTrainer):
         if self.config.inferencer.model_type == "GAN":
             batch["gen_output"] = self.model_gen(batch["lr_image"])
         else:  # regular
-            batch["gen_output"] = self.model_diff(batch["lr_image"])
+            custom_type = self.config.inferencer.get("custom_type", None)
+
+            # Handle different return types for different models
+            if custom_type == "Swin2SR":
+                # The Swin2SR model might return multiple outputs or a tuple
+                output = self.model_diff(batch["lr_image"])
+
+                # If it's a tuple, take the first element
+                if isinstance(output, tuple):
+                    batch["gen_output"] = output[0]
+                else:
+                    batch["gen_output"] = output
+            else:
+                # For other models, use standard behavior
+                batch["gen_output"] = self.model_diff(batch["lr_image"])
 
         # Update metrics
         if metrics is not None:

@@ -58,3 +58,4 @@ trainer:
   max_grad_norm: 10
   gradient_accumulation_steps: 50
   model_type: "regular" # support "GAN" and "regular"
+  custom_type: "Swin2SR" # can be "ESRT", "Swin2SR", or null for default models
