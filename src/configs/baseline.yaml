@@ -41,7 +41,7 @@ loss_function_diff:
 trainer:
   log_step: 50
   n_epochs: 10
-  epoch_len: 20000
+  epoch_len: 5000
   disc_steps: 10
   device_tensors: ["data_object"] # which tensors should be on device (ex. GPU)
   resume_from: null # null or path to the checkpoint dir with *.pth and config.yaml
@@ -50,12 +50,12 @@ trainer:
   monitor: "max PSNR" # "off" or "max/min metric_name", i.e. our goal is to maximize/minimize metric
   save_period: 1 # checkpoint each save_period epochs in addition to the best epoch
   early_stop: ${trainer.n_epochs} # epochs for early stopping
-  save_dir: "swin_custom"
+  save_dir: "RealESRGAN_customv"
   seed: 1
-  from_pretrained_gen: "assets/weights/RealESRGAN_x2plus.pth"
+  from_pretrained_gen: "assets/weights/model_RealESRGAN__degradation_custom__30ep.pth"
   from_pretrained_disc: "assets/weights/RealESRGAN_x2plus_netD.pth"
-  from_pretrained_diff: "assets/weights/Swin2SR_Lightweight_X2_64.pth"
+  from_pretrained_diff: "assets/weights/model_RealESRGAN__degradation_custom__30ep.pth.pth"
   max_grad_norm: 10
   gradient_accumulation_steps: 50
-  model_type: "regular" # support "GAN" and "regular"
+  model_type: "GAN" # support "GAN" and "regular"
   custom_type: "Swin2SR" # can be "ESRT", "Swin2SR", or null for default models

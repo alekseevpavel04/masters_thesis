@@ -7,7 +7,7 @@ defaults:
   - datasets: inference
   - dataloader: inference
   - transforms: inference
-  - degradation: train_RealESRGAN
+  - degradation: train_custom
   - _self_
 
 inferencer:
@@ -19,7 +19,7 @@ inferencer:
   save_path: "inference"  # path for saving inference results
   save_dir: "saved/models"  # directory for saving logs and checkpoints
   seed: 1
-  from_pretrained_gen: "assets/weights/NONE"
+  from_pretrained_gen: "assets/weights/"
   from_pretrained_diff: "assets/weights/model_Swin2SR__degradation_APISR__10ep.pth"
   resume_from: null  # path to checkpoint to resume from, relative to save_dir/run_name
   log_step: 10  # how often to log images during inference
