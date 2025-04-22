@@ -303,15 +303,45 @@ class BaseTrainer:
                     desc=part,
                     total=len(dataloader),
             ):
-                batch = self.process_batch(
-                    batch,
-                    metrics=self.evaluation_metrics,
-                )
+                try:
+                    batch = self.move_batch_to_device(batch)
+                    batch = self.transform_batch(batch)
+
+                    # Generate low-resolution images
+                    batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
+
+                    # Generate high-resolution images based on model type
+                    if self.model_type == "GAN":
+                        batch["gen_output"] = self.model_gen(batch["lr_image"])
+                    else:  # regular
+                        custom_type = getattr(self.config.trainer, "custom_type", None)
+
+                        # Handle different model return types
+                        if custom_type == "Swin2SR":
+                            output = self.model_diff(batch["lr_image"])
+                            if isinstance(output, tuple):
+                                batch["diff_output"] = output[0]
+                            else:
+                                batch["diff_output"] = output
+                        else:
+                            batch["diff_output"] = self.model_diff(batch["lr_image"])
+
+                    # Update metrics
+                    for met in self.metrics["inference"]:
+                        self.evaluation_metrics.update(met.name, met(**batch))
+
+                    # Log batch at specified intervals
+                    if batch_idx % self.log_step == 0:
+                        self.writer.set_step(epoch * self.epoch_len + batch_idx, part)
+                        self._log_batch(batch_idx, batch, part)
+
+                except Exception as e:
+                    torch.cuda.empty_cache()
+                    self.logger.error(f"Error during evaluation: {str(e)}")
+                    raise e
+
             self.writer.set_step(epoch * self.epoch_len, part)
             self._log_scalars(self.evaluation_metrics)
-            self._log_batch(
-                batch_idx, batch, part
-            )  # log only the last batch during inference
 
         result = self.evaluation_metrics.result()
 

@@ -17,6 +17,7 @@
 /swin_RealESRGAN
 /swin_custom
 /proxy
+/swin_customv
 
 # PyCharm проектные файлы
 .idea/
@@ -73,4 +74,4 @@ dataset_preparation/*.webm
 /cuda-keyring_1.1-1_all.deb
 /torch2trt/
 
-
+assets/weights/weights.py

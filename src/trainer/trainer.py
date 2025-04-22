@@ -34,7 +34,7 @@ class Trainer(BaseTrainer):
                 metric_funcs = self.metrics["train"]
 
                 if self.config.trainer.model_type == "GAN":
-                    # GAN logic remains the same
+                    # GAN training logic
                     for _ in range(self.disc_steps):
                         if self.current_accumulation_step == 0:
                             self.optimizer_disc.zero_grad()
@@ -85,6 +85,7 @@ class Trainer(BaseTrainer):
                         self.optimizer_gen.step()
 
                 elif self.config.trainer.model_type == "regular":
+                    # Regular model training logic
                     if self.current_accumulation_step == 0:
                         self.optimizer_diff.zero_grad()
 
@@ -120,12 +121,18 @@ class Trainer(BaseTrainer):
                     self.current_accumulation_step = (
                                                                  self.current_accumulation_step + 1) % self.gradient_accumulation_steps
 
-                else:
-                    with torch.no_grad():
-                        if self.config.trainer.model_type == "GAN":
-                            batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
+            # For validation/inference or metric calculation during training
+            else:
+                with torch.no_grad():
+                    # If processes are skipped during validation, we need to ensure lr_image, gen_output/diff_output exist
+                    if "lr_image" not in batch:
+                        batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
+
+                    if self.config.trainer.model_type == "GAN":
+                        if "gen_output" not in batch:
                             batch["gen_output"] = self.model_gen(batch["lr_image"])
 
+                        if "disc_loss" not in batch or "gen_loss" not in batch:
                             disc_fake = self.model_disc(batch["gen_output"])
                             disc_real = self.model_disc(batch["data_object"])
 
@@ -133,12 +140,11 @@ class Trainer(BaseTrainer):
                             batch["gen_loss"] = self.criterion_gen(disc_fake, batch)
 
                             del disc_fake, disc_real
-                        elif self.config.trainer.model_type == "regular":
-                            batch["lr_image"] = self.degrader.process_batch(batch["data_object"])
+                    elif self.config.trainer.model_type == "regular":
+                        # Check for custom model type
+                        custom_type = getattr(self.config.trainer, "custom_type", None)
 
-                            # Check for custom model type
-                            custom_type = getattr(self.config.trainer, "custom_type", None)
-
+                        if "diff_output" not in batch:
                             if custom_type == "Swin2SR":
                                 # Handle Swin2SR model output
                                 output = self.model_diff(batch["lr_image"])
@@ -152,10 +158,12 @@ class Trainer(BaseTrainer):
                                 # Standard handling for other models
                                 batch["diff_output"] = self.model_diff(batch["lr_image"])
 
+                        if "diff_loss" not in batch:
                             batch["diff_loss"] = self.criterion_diff(batch["diff_output"], batch["data_object"])
 
-                        torch.cuda.empty_cache()
+                    torch.cuda.empty_cache()
 
+            # Update metrics during training at specified intervals
             if self.is_train and (self.current_accumulation_step + 1) % self.log_step == 0:
                 self.last_metrics = {}
                 for met in metric_funcs:
@@ -168,10 +176,15 @@ class Trainer(BaseTrainer):
                     self.last_metrics["diff_loss"] = batch["diff_loss"].item()
                 for name, value in self.last_metrics.items():
                     metrics.update(name, value)
+            # Update metrics during validation/inference
             elif not self.is_train:
                 for met in metric_funcs:
-                    metric_value = met(**batch)
-                    metrics.update(met.name, metric_value)
+                    try:
+                        metric_value = met(**batch)
+                        metrics.update(met.name, metric_value)
+                    except Exception as e:
+                        self.logger.warning(f"Error calculating metric {met.name}: {str(e)}")
+                        # Continue with other metrics even if one fails
 
             return batch
 
