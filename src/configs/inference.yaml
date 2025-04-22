@@ -16,7 +16,7 @@ inferencer:
   device_tensors: ["data_object"]  # which tensors should be on device (ex. GPU)
   device: auto  # device name or "auto"
   override: True  # if True, will override the previous run with the same name
-  save_path: "inference"  # path for saving inference results
+  save_path: "inference2"  # path for saving inference results
   save_dir: "saved/models"  # directory for saving logs and checkpoints
   seed: 1
   from_pretrained_gen: "assets/weights/"

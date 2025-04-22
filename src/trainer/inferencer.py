@@ -103,6 +103,15 @@ class Inferencer(BaseTrainer):
         for part, dataloader in self.evaluation_dataloaders.items():
             logs = self._inference_part(part, dataloader)
             part_logs[part] = logs
+
+            # Log average PSNR from the logs
+            if "PSNR" in logs:
+                avg_psnr = logs["PSNR"]
+                if hasattr(self, "logger") and self.logger is not None:
+                    self.logger.info(f"Average PSNR for {part}: {avg_psnr:.4f}")
+                else:
+                    print(f"Average PSNR for {part}: {avg_psnr:.4f}")
+
         return part_logs
 
     def process_batch(self, batch_idx, batch, metrics, part):
@@ -135,7 +144,13 @@ class Inferencer(BaseTrainer):
         # Update metrics
         if metrics is not None:
             for met in self.metrics["inference"]:
-                metrics.update(met.name, met(**batch))
+                metric_value = met(**batch)
+                metrics.update(met.name, metric_value)
+
+                # For debugging, print PSNR value every 10 batches
+                if met.name == "PSNR" and batch_idx % 10 == 0:
+                    if hasattr(self, "logger") and self.logger is not None:
+                        self.logger.debug(f"Batch {batch_idx}: PSNR = {metric_value.item():.4f}")
 
         # Log images at specified intervals
         if self.writer is not None and batch_idx % self.log_step == 0:
@@ -157,9 +172,16 @@ class Inferencer(BaseTrainer):
             logs (dict): computed metrics for the partition.
         """
         self.is_train = False
-        self.model_gen.eval()
+        if self.config.inferencer.model_type == "GAN":
+            self.model_gen.eval()
+        else:  # regular
+            self.model_diff.eval()
+
         self.evaluation_metrics.reset()
 
+        # Create a list to store all PSNR values
+        all_psnr_scores = []
+        print(self.save_path)
         if self.save_path is not None:
             (self.save_path / part).mkdir(exist_ok=True, parents=True)
 
@@ -175,8 +197,25 @@ class Inferencer(BaseTrainer):
                     part=part,
                     metrics=self.evaluation_metrics,
                 )
+
+                # Get the PSNR value for this batch and add it to our list
+                for met in self.metrics["inference"]:
+                    if met.name == "PSNR":
+                        psnr_value = met(**batch).item()
+                        all_psnr_scores.append(psnr_value)
+
             # Log final metrics
             if self.writer is not None:
                 self._log_scalars(self.evaluation_metrics)
+
+            # Save all PSNR scores to a file
+            if self.save_path is not None and len(all_psnr_scores) > 0:
+                import numpy as np
+                scores_path = self.save_path / f"{part}_psnr_scores.txt"
+                np.savetxt(str(scores_path), all_psnr_scores)
+                if hasattr(self, "logger") and self.logger is not None:
+                    self.logger.info(f"Saved {len(all_psnr_scores)} PSNR scores to {scores_path}")
+                else:
+                    print(f"Saved {len(all_psnr_scores)} PSNR scores to {scores_path}")
 
         return self.evaluation_metrics.result()

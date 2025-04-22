@@ -47,7 +47,7 @@ def main(config):
     degrader = instantiate(config.degradation)
 
     # save_path for generated high-resolution images
-    save_path = ROOT_PATH / "data" / "saved" / config.inferencer.save_path
+    save_path = ROOT_PATH / "saved" / config.inferencer.save_path
     save_path.mkdir(exist_ok=True, parents=True)
 
     inferencer = Inferencer(

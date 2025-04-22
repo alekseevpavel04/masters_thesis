@@ -3,3 +3,4 @@ inference:
   datasets:
     - _target_: src.datasets.CustomDataset_test
       instance_transforms: ${transforms.instance_transforms.train}
+      limit: 20
