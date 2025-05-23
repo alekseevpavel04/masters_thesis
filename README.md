@@ -1,4 +1,4 @@
-# Main README
+![example](https://github.com/user-attachments/assets/bea82d91-abe5-40a7-b1fa-2d23b9cdda93)
 
 ## Project Description
 
